@@ -1,0 +1,151 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.34.4.
+--
+-- see: https://github.com/sol/hpack
+
+name:           LPPaver
+version:        0.0.1
+description:    Please see the README on GitHub at <https://github.com/rasheedja/LPPaver#readme>
+homepage:       https://github.com/rasheedja/LPPaver#readme
+bug-reports:    https://github.com/rasheedja/LPPaver/issues
+author:         Junaid Rasheed
+maintainer:     rasheeja@aston.ac.uk
+copyright:      MPL-2.0
+license:        MPL-2.0
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/rasheedja/LPPaver
+
+library
+  exposed-modules:
+      Lib
+      LPPaver.Type
+  other-modules:
+      Paths_LPPaver
+  hs-source-dirs:
+      src
+  default-extensions:
+      RebindableSyntax,
+      ScopedTypeVariables,
+      TypeFamilies,
+      TypeOperators,
+      ConstraintKinds,
+      DefaultSignatures,
+      MultiParamTypeClasses,
+      FlexibleContexts,
+      FlexibleInstances,
+      UndecidableInstances
+  build-depends:
+      PropaFP
+    , QuickCheck
+    , aern2-mfun
+    , aern2-mp
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , collect-errors
+    , containers
+    , extra
+    , ghc
+    , mixed-types-num
+    , parallel
+    , pqueue
+    , process
+    , random
+    , regex-tdfa
+    , scientific
+    , simplex-haskell
+    , temporary
+  default-language: Haskell2010
+
+executable LPPaver-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_LPPaver
+  hs-source-dirs:
+      app
+  default-extensions:
+      RebindableSyntax,
+      ScopedTypeVariables,
+      TypeFamilies,
+      TypeOperators,
+      ConstraintKinds,
+      DefaultSignatures,
+      MultiParamTypeClasses,
+      FlexibleContexts,
+      FlexibleInstances,
+      UndecidableInstances
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      LPPaver
+    , PropaFP
+    , QuickCheck
+    , aern2-mfun
+    , aern2-mp
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , collect-errors
+    , containers
+    , extra
+    , ghc
+    , mixed-types-num
+    , parallel
+    , pqueue
+    , process
+    , random
+    , regex-tdfa
+    , scientific
+    , simplex-haskell
+    , temporary
+  default-language: Haskell2010
+
+test-suite LPPaver-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_LPPaver
+  hs-source-dirs:
+      test
+  default-extensions:
+      RebindableSyntax,
+      ScopedTypeVariables,
+      TypeFamilies,
+      TypeOperators,
+      ConstraintKinds,
+      DefaultSignatures,
+      MultiParamTypeClasses,
+      FlexibleContexts,
+      FlexibleInstances,
+      UndecidableInstances
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      LPPaver
+    , PropaFP
+    , QuickCheck
+    , aern2-mfun
+    , aern2-mp
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , collect-errors
+    , containers
+    , extra
+    , ghc
+    , mixed-types-num
+    , parallel
+    , pqueue
+    , process
+    , random
+    , regex-tdfa
+    , scientific
+    , simplex-haskell
+    , temporary
+  default-language: Haskell2010

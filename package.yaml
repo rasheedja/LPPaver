@@ -1,0 +1,80 @@
+name:                LPPaver
+version:             0.0.1
+github:              "rasheedja/LPPaver"
+license:             MPL-2.0
+author:              "Junaid Rasheed"
+maintainer:          "rasheeja@aston.ac.uk"
+copyright:           "MPL-2.0"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/rasheedja/LPPaver#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- mixed-types-num
+- aern2-mfun
+- aern2-mp
+- parallel
+- collect-errors
+- containers
+- pqueue
+# - fastlogger
+- extra
+- QuickCheck
+- ghc
+- scientific
+- binary
+- regex-tdfa
+- temporary
+- random
+- bytestring
+- process
+- PropaFP
+- simplex-haskell
+
+default-extensions:
+- RebindableSyntax,
+- ScopedTypeVariables,
+- TypeFamilies,
+- TypeOperators,
+- ConstraintKinds,
+- DefaultSignatures,
+- MultiParamTypeClasses,
+- FlexibleContexts,
+- FlexibleInstances,
+- UndecidableInstances
+
+library:
+  source-dirs: src
+
+executables:
+  LPPaver-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - LPPaver
+
+tests:
+  LPPaver-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - LPPaver
