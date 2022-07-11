@@ -41,6 +41,8 @@ dependencies:
 - process
 - PropaFP
 - simplex-haskell
+- directory
+- optparse-applicative
 
 default-extensions:
 - RebindableSyntax,
@@ -58,15 +60,17 @@ library:
   source-dirs: src
 
 executables:
-  LPPaver-exe:
-    main:                Main.hs
-    source-dirs:         app
+  lppaver:
+    main: app/LPPaver.hs
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -O2
     dependencies:
     - LPPaver
+    - PropaFP
 
 tests:
   LPPaver-test:

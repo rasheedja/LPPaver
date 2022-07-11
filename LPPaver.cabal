@@ -52,9 +52,11 @@ library
     , bytestring
     , collect-errors
     , containers
+    , directory
     , extra
     , ghc
     , mixed-types-num
+    , optparse-applicative
     , parallel
     , pqueue
     , process
@@ -65,12 +67,10 @@ library
     , temporary
   default-language: Haskell2010
 
-executable LPPaver-exe
-  main-is: Main.hs
+executable lppaver
+  main-is: app/LPPaver.hs
   other-modules:
       Paths_LPPaver
-  hs-source-dirs:
-      app
   default-extensions:
       RebindableSyntax,
       ScopedTypeVariables,
@@ -82,7 +82,7 @@ executable LPPaver-exe
       FlexibleContexts,
       FlexibleInstances,
       UndecidableInstances
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
   build-depends:
       LPPaver
     , PropaFP
@@ -94,9 +94,11 @@ executable LPPaver-exe
     , bytestring
     , collect-errors
     , containers
+    , directory
     , extra
     , ghc
     , mixed-types-num
+    , optparse-applicative
     , parallel
     , pqueue
     , process
@@ -137,9 +139,11 @@ test-suite LPPaver-test
     , bytestring
     , collect-errors
     , containers
+    , directory
     , extra
     , ghc
     , mixed-types-num
+    , optparse-applicative
     , parallel
     , pqueue
     , process
