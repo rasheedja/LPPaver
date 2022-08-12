@@ -43,27 +43,17 @@ library
       UndecidableInstances
   build-depends:
       PropaFP
-    , QuickCheck
-    , aern2-mfun
-    , aern2-mp
+    , aern2-mfun >=0.2.9 && <0.3
+    , aern2-mp >=0.2.9.1 && <0.3
     , base >=4.7 && <5
-    , binary
-    , bytestring
-    , collect-errors
+    , collect-errors >=0.1.5 && <0.2
     , containers
     , directory
-    , extra
-    , ghc
-    , mixed-types-num
+    , mixed-types-num >=0.5.10 && <0.6
     , optparse-applicative
     , parallel
     , pqueue
-    , process
-    , random
-    , regex-tdfa
-    , scientific
-    , simplex-haskell
-    , temporary
+    , simplex-method
   default-language: Haskell2010
 
 executable lppaver
@@ -85,27 +75,17 @@ executable lppaver
   build-depends:
       LPPaver
     , PropaFP
-    , QuickCheck
-    , aern2-mfun
-    , aern2-mp
+    , aern2-mfun >=0.2.9 && <0.3
+    , aern2-mp >=0.2.9.1 && <0.3
     , base >=4.7 && <5
-    , binary
-    , bytestring
-    , collect-errors
+    , collect-errors >=0.1.5 && <0.2
     , containers
     , directory
-    , extra
-    , ghc
-    , mixed-types-num
+    , mixed-types-num >=0.5.10 && <0.6
     , optparse-applicative
     , parallel
     , pqueue
-    , process
-    , random
-    , regex-tdfa
-    , scientific
-    , simplex-haskell
-    , temporary
+    , simplex-method
   default-language: Haskell2010
 
 test-suite LPPaver-test
@@ -130,25 +110,15 @@ test-suite LPPaver-test
   build-depends:
       LPPaver
     , PropaFP
-    , QuickCheck
-    , aern2-mfun
-    , aern2-mp
+    , aern2-mfun >=0.2.9 && <0.3
+    , aern2-mp >=0.2.9.1 && <0.3
     , base >=4.7 && <5
-    , binary
-    , bytestring
-    , collect-errors
+    , collect-errors >=0.1.5 && <0.2
     , containers
     , directory
-    , extra
-    , ghc
-    , mixed-types-num
+    , mixed-types-num >=0.5.10 && <0.6
     , optparse-applicative
     , parallel
     , pqueue
-    , process
-    , random
-    , regex-tdfa
-    , scientific
-    , simplex-haskell
-    , temporary
+    , simplex-method
   default-language: Haskell2010
