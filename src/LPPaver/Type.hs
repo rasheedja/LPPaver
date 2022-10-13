@@ -26,7 +26,7 @@ import AERN2.MP.Dyadic (Dyadic, dyadic)
 
 import qualified Debug.Trace as T
 
-import qualified Data.PQueue.Prio.Min as Q
+import qualified Data.PQueue.Prio.Max as Q
 
 import Data.Maybe
 import Control.CollectErrors
@@ -531,9 +531,9 @@ safeMaximumMaximum (f : fs) box mCurrentMax =
     range = apply f box
     rangeMax = snd $ endpointsAsIntervals range
 
-decideConjunctionBestFirst :: Q.MinPQueue (CN MPBall) ([(E.ESafe, BoxFun)], TypedVarMap, Bool)-> Integer -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
+decideConjunctionBestFirst :: Q.MaxPQueue (CN MPBall) ([(E.ESafe, BoxFun)], TypedVarMap, Bool)-> Integer -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
 decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relativeImprovementCutoff p =
-  case Q.minView queue of
+  case Q.maxView queue of
     Just ((expressionsWithFunctions, typedVarMap, isLeftCorner), queueWithoutVarMap) ->
       if numberOfBoxesExamined !<! numberOfBoxesCutoff then
         trace (show numberOfBoxesExamined) $
