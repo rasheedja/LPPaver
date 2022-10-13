@@ -50,9 +50,7 @@ extra-deps:
   # simplex-method
   - simplex-method-0.1.0.0
   # PropaFP
-  - git: https://github.com/rasheedja/PropaFP.git
-    commit: 5ad0f4e2833482d06aa73032f6e9e5a0765b8c5f
-
+  - PropaFP-0.1.1.0
   
 # Override default flag values for local packages and extra-deps
 # flags: {}
