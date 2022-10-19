@@ -19,70 +19,57 @@ import PropaFP.Translators.BoxFun
 import AERN2.BoxFun.Optimisation
 import Control.Parallel.Strategies
 
+-- TODO: Remove traces
+-- |Dummy trace function
 trace a x = x
 
+-- |Calculate the range of some 'E.E' expression over the given 'VarMap' with the given 'Precision' using 'apply'.
 applyExpression :: E.E -> VarMap -> Precision -> CN MPBall
 applyExpression expression varMap p =
   apply f (varMapToBox varMap p)
   where
     f = expressionToBoxFun expression varMap p
 
+-- |Calculate the gradient of some 'E.E' expression over the given 'VarMap' with the given 'Precision' using 'gradient'.
 gradientExpression :: E.E -> VarMap -> Precision -> V.Vector (CN MPBall)
 gradientExpression expression varMap p =
   gradient f (varMapToBox varMap p)
   where
     f = expressionToBoxFun expression varMap p
 
-applyExpressionLipschitz :: E.E -> VarMap -> Precision -> CN MPBall
-applyExpressionLipschitz expression varMap p =
-  applyLipschitz f (varMapToBox varMap p)
-  where
-    f = expressionToBoxFun expression varMap p
-
-applyDisjunction :: [E.E] -> VarMap -> Precision -> [CN MPBall]
-applyDisjunction expressions varMap p =
+-- |Run 'applyExpression' on each 'E.E' in a given list
+applyExpressionList :: [E.E] -> VarMap -> Precision -> [CN MPBall]
+applyExpressionList expressions varMap p =
   map
   (\e -> apply (expressionToBoxFun e varMap p) box)
   expressions
   where
     box = varMapToBox varMap p
 
-gradientDisjunction :: [E.E] -> VarMap -> Precision -> [V.Vector (CN MPBall)]
-gradientDisjunction expressions varMap p =
+-- |Run 'gradientExpression' on each 'E.E' in a given list
+gradientExpressionList :: [E.E] -> VarMap -> Precision -> [V.Vector (CN MPBall)]
+gradientExpressionList expressions varMap p =
   map
   (\e -> gradientExpression e varMap p)
   expressions
 
-applyECNF :: [[E.E]] -> VarMap -> Precision -> [[CN MPBall]]
-applyECNF cnf varMap p = map (\d -> applyDisjunction d varMap p) cnf
+-- |Run 'applyExpressionList' on each '[E.E]' in a given list
+applyExpressionDoubleList :: [[E.E]] -> VarMap -> Precision -> [[CN MPBall]]
+applyExpressionDoubleList cnf varMap p = map (\d -> applyExpressionList d varMap p) cnf
 
-gradientEDoubleList :: [[E.E]] -> VarMap -> Precision -> [[V.Vector (CN MPBall)]]
-gradientEDoubleList cnf varMap p = map (\d -> gradientDisjunction d varMap p) cnf
+-- |Run 'gradientExpressionList' on each '[E.E]' in a given list
+gradientExpressionDoubleList :: [[E.E]] -> VarMap -> Precision -> [[V.Vector (CN MPBall)]]
+gradientExpressionDoubleList cnf varMap p = map (\d -> gradientExpressionList d varMap p) cnf
 
-applyESafeCNF :: [[E.ESafe]] -> VarMap -> Precision -> [[CN MPBall]]
-applyESafeCNF cnf  = applyECNF (map (map E.extractSafeE) cnf)
+-- |Run 'applyExpressionDoubleList' on an [['E.ESafe']]
+applyESafeDoubleList :: [[E.ESafe]] -> VarMap -> Precision -> [[CN MPBall]]
+applyESafeDoubleList cnf  = applyExpressionDoubleList (map (map E.extractSafeE) cnf)
 
+-- |Run 'gradientExpressionDoubleList' on an [['E.ESafe']]
 gradientESafeDoubleList :: [[E.ESafe]] -> VarMap -> Precision -> [[V.Vector (CN MPBall)]]
-gradientESafeDoubleList cnf = gradientEDoubleList (map (map E.extractSafeE) cnf)
+gradientESafeDoubleList cnf = gradientExpressionDoubleList (map (map E.extractSafeE) cnf)
 
-rangeAboveZero :: CN MPBall -> Bool
-rangeAboveZero r = r !>! 0
-
-disjunctionRangesAboveZero :: [CN MPBall] -> Bool
-disjunctionRangesAboveZero = any rangeAboveZero
-
-conjunctionRangesAboveZero :: [[CN MPBall]] -> Bool
-conjunctionRangesAboveZero = all disjunctionRangesAboveZero
-
-rangeBelowZero :: CN MPBall -> Bool
-rangeBelowZero r = r !<! 0
-
-disjunctionRangesBelowZero :: [CN MPBall] -> Bool
-disjunctionRangesBelowZero = all rangeBelowZero
-
-conjunctionRangesBelowZero :: [[CN MPBall]] -> Bool
-conjunctionRangesBelowZero = all disjunctionRangesBelowZero
-
+-- |Evaluate an 'E.F' over some 'VarMap' with a given 'Precision' using 'applyExpression'
 checkFWithApply :: E.F -> VarMap -> Precision -> CN Kleenean
 checkFWithApply (E.FComp op e1 e2) varMap p =
   case op of
@@ -106,6 +93,8 @@ checkFWithApply (E.FNot f) varMap p = not $ checkFWithApply f varMap p
 checkFWithApply E.FTrue _ _         = cn CertainTrue
 checkFWithApply E.FFalse _ _        = cn CertainFalse
 
+-- |Filter out expressions in a list which are certainly false.
+-- If an expression cannot be evaluated, do not filter it out.
 filterOutFalseExpressions :: [((E.ESafe, BoxFun), CN MPBall)] -> [((E.ESafe, BoxFun), CN MPBall)]
 filterOutFalseExpressions =
   filter
@@ -115,6 +104,8 @@ filterOutFalseExpressions =
       E.ENonStrict _ -> hasError range || not (range !<! 0)
   )
 
+-- |Filter out expressions in a list which are certainly true.
+-- If an expression cannot be evaluated, do not filter it out.
 filterOutTrueExpressions :: [((E.ESafe, BoxFun), CN MPBall)] -> [((E.ESafe, BoxFun), CN MPBall)]
 filterOutTrueExpressions =
   filter
@@ -134,14 +125,15 @@ filterOutTrueExpressions =
     )
   )
 
+-- |Returns true if any of the ranges of the given Expression have been evaluated to be greater than or equal to zero.
 decideRangesGEZero :: [((E.E, BoxFun), CN MPBall)] -> Bool
 decideRangesGEZero = any (\(_, range) -> not (hasError range) && range !>=! 0)
 
+-- |The mean of a list of 'CN Dyadic' numbers.
 mean :: [CN Dyadic] -> CN Rational
 mean xs = sum xs / length xs
 
--- |Avoids exceptions which occur when using the MixedTypesNumPrelude.maximum by ignoring
--- any numbers with errors
+-- |Safely find the maximum of a list of ordered elements, avoiding exceptions by ignoring anything with errors
 safeMaximum :: (HasOrderAsymmetric a a, CanTestCertainly (OrderCompareType a a), CanTestErrorsPresent a) =>
   a -> [a] -> a
 safeMaximum currentMax [] = currentMax
@@ -150,10 +142,7 @@ safeMaximum currentMax (x : xs) =
     then safeMaximum currentMax xs
     else safeMaximum (if x !>! currentMax then x else currentMax) xs
 
-safeCentre :: (CanTestErrorsPresent t, IsBall t, CentreType t ~ CollectErrors CN.NumErrors Dyadic)
-  => t -> CollectErrors CN.NumErrors Dyadic
-safeCentre r = if hasError r then cn (dyadic (-1048576)) else AERN2.MP.Ball.centre r
-
+-- |Safely find the maximum centre of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
 safeMaximumCentre :: [BoxFun] -> Box -> Maybe (CN Dyadic) -> Maybe (CN Dyadic)
 safeMaximumCentre []       _   mCurrentCentre = mCurrentCentre
 safeMaximumCentre (f : fs) box mCurrentCentre =
@@ -170,6 +159,7 @@ safeMaximumCentre (f : fs) box mCurrentCentre =
     range = apply f box
     rangeCentre = AERN2.MP.Ball.centre range
 
+-- |Safely find the maximum minimum of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
 safeMaximumMinimum :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
 safeMaximumMinimum []       _   mCurrentMin = mCurrentMin
 safeMaximumMinimum (f : fs) box mCurrentMin =
@@ -186,6 +176,7 @@ safeMaximumMinimum (f : fs) box mCurrentMin =
     range = apply f box
     rangeMin = fst $ endpointsAsIntervals range
 
+-- |Safely find the maximum maximum of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
 safeMaximumMaximum :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
 safeMaximumMaximum []       _   mCurrentMax = mCurrentMax
 safeMaximumMaximum (f : fs) box mCurrentMax =
@@ -203,6 +194,7 @@ safeMaximumMaximum (f : fs) box mCurrentMax =
     rangeMax = snd $ endpointsAsIntervals range
 
 -- TODO: Move to PropaFP
+-- |Bisect the widest interval in a 'VarMap'
 bisectWidestInterval :: VarMap -> (VarMap, VarMap)
 bisectWidestInterval [] = error "Given empty box to bisect"
 bisectWidestInterval vm = bisectVar vm widestVar
@@ -210,6 +202,7 @@ bisectWidestInterval vm = bisectVar vm widestVar
     (widestVar, _) = widestInterval (tail vm) (head vm)
 
 -- TODO: Move to PropaFP
+-- |Bisect the widest interval in a 'TypedVarMap'
 bisectWidestTypedInterval :: TypedVarMap -> (TypedVarMap, TypedVarMap)
 bisectWidestTypedInterval [] = error "Given empty box to bisect"
 bisectWidestTypedInterval vm = bisectTypedVar vm widestVar
@@ -228,7 +221,7 @@ ensureVarMapWithinVarMap ((v, (roundedL, roundedR)) : rvm) ((_, (originalL, orig
   : ensureVarMapWithinVarMap rvm ovm
 ensureVarMapWithinVarMap _ _ = error "Different sized varMaps"
 
--- |Version of computeCornerValuesAndDerivatives that returns Nothing if a calculation contains an error
+-- |Version of 'computeCornerValuesAndDerivatives' that returns Nothing if a calculation contains an error
 safelyComputeCornerValuesAndDerivatives :: [((E.ESafe, BoxFun), CN MPBall)] -> Box -> Maybe [(CN MPBall, CN MPBall, V.Vector (CN MPBall))]
 safelyComputeCornerValuesAndDerivatives esWithRanges box =
   if cornerRangesWithDerivativesHasError
@@ -256,6 +249,8 @@ safelyComputeCornerValuesAndDerivatives esWithRanges box =
       (\(l, r, c) -> hasError l || hasError r || V.any hasError c)
       cornerRangesWithDerivatives
 
+-- |Return the value of the given 'E.ESafe' expression/'BoxFun' at the extreme left corner and the extreme right corner as well as partial derivatives over the given 'Box'.
+-- Extreme corners are defined as the minimum/maximum of every interval in a 'Box' for the left/right extreme corners respectively.
 computeCornerValuesAndDerivatives :: [((E.ESafe, BoxFun), CN MPBall)] -> Box -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))]
 computeCornerValuesAndDerivatives esWithRanges box = filteredCornerRangesWithDerivatives
   where
@@ -280,6 +275,8 @@ computeCornerValuesAndDerivatives esWithRanges box = filteredCornerRangesWithDer
       (\(l, r, c) -> not (hasError l || hasError r || V.any hasError c)) -- Filter out functions where any partial derivative or corners contain an error
       cornerRangesWithDerivatives
 
+-- |Decide if the ranges of a conjunction of 'E.ESafe' expressions is false in a standard manner
+-- A range with an error is treated as false.
 decideConjunctionRangesFalse :: [((E.ESafe, BoxFun), CN MPBall)] -> Bool
 decideConjunctionRangesFalse =
   any
@@ -289,7 +286,20 @@ decideConjunctionRangesFalse =
       E.ENonStrict _  -> not (hasError range) && range !<! 0
   )
 
+-- |Decide if the ranges of a conjunction of 'E.ESafe' expressions is true in a standard manner
+-- A range with an error is treated as false.
+decideConjunctionRangesTrue :: [((E.ESafe, BoxFun), CN MPBall)] -> Bool
+decideConjunctionRangesTrue =
+  all
+  (\((safeE, _), range) ->
+    case safeE of
+      E.EStrict _     -> not (hasError range) && range !>! 0
+      E.ENonStrict _  -> not (hasError range) && range !>=! 0
+  )
 
+
+-- |Decide if the ranges of a disjunction of 'E.ESafe' expressions is true in a standard manner
+-- A range with an error is treated as false.
 decideDisjunctionRangesTrue :: [((E.ESafe, BoxFun), CN MPBall)] -> Bool
 decideDisjunctionRangesTrue =
   any
@@ -299,6 +309,8 @@ decideDisjunctionRangesTrue =
       E.ENonStrict _  -> not (hasError range) && range !>=! 0
   )
 
+-- |Decide if the ranges of a disjunction of 'E.ESafe' expressions is false in a standard manner
+-- A range with an error is treated as false.
 decideDisjunctionRangesFalse :: [((E.ESafe, BoxFun), CN MPBall)] -> Bool
 decideDisjunctionRangesFalse =
   all
@@ -308,6 +320,7 @@ decideDisjunctionRangesFalse =
       E.ENonStrict _  -> not (hasError range) && range !<! 0
   )
 
+-- |Evaluate the range of each 'E.ESafe' expression in a disjunction and check if the disjunction is false in a standard manner. 
 decideDisjunctionFalse :: [(E.ESafe, BoxFun)] -> TypedVarMap -> Precision -> Bool
 decideDisjunctionFalse expressionsWithFunctions varMap p =
   all
@@ -321,9 +334,11 @@ decideDisjunctionFalse expressionsWithFunctions varMap p =
   )
   expressionsWithFunctions
 
-decideConjunctionFalse :: [[(E.ESafe, BoxFun)]] -> TypedVarMap -> Precision -> Bool
-decideConjunctionFalse c v p = any (\d -> decideDisjunctionFalse d v p) c
+-- |Evaluate the range of each 'E.ESafe' expression in a CNF and check if the CNF is false in a standard manner. 
+decideCNFFalse :: [[(E.ESafe, BoxFun)]] -> TypedVarMap -> Precision -> Bool
+decideCNFFalse c v p = any (\d -> decideDisjunctionFalse d v p) c
 
+-- |Evaluate the range of each 'E.ESafe' expression in a conjunction and check if the conjunction is true in a standard manner. 
 decideConjunctionTrue :: [(E.ESafe, BoxFun)] -> TypedVarMap -> Precision -> Bool
 decideConjunctionTrue c v p =
   all (\(safeE, f) ->
@@ -336,7 +351,8 @@ decideConjunctionTrue c v p =
   )
   c
 
-checkDisjunctionResults :: [(Maybe Bool, Maybe a)] -> Maybe a -> (Maybe Bool, Maybe a)
+-- |Check the results of a disjunction in a standard manner
+checkDisjunctionResults :: [(Maybe Bool, Maybe potentialModel)] -> Maybe potentialModel -> (Maybe Bool, Maybe potentialModel)
 checkDisjunctionResults [] Nothing = (Just False, Nothing)
 checkDisjunctionResults [] indeterminateArea@(Just _) = (Nothing, indeterminateArea)
 checkDisjunctionResults (result : results) mIndeterminateArea =
@@ -347,7 +363,8 @@ checkDisjunctionResults (result : results) mIndeterminateArea =
     (Nothing, indeterminateArea@(Just _)) -> checkDisjunctionResults results indeterminateArea
     (Nothing, Nothing) -> undefined
 
-checkConjunctionResults :: [(Maybe Bool, Maybe a)] -> Maybe a -> (Maybe Bool, Maybe a)
+-- |Check the results of a conjunction in a standard manner
+checkConjunctionResults :: [(Maybe Bool, Maybe potentialModel)] -> Maybe potentialModel -> (Maybe Bool, Maybe potentialModel)
 checkConjunctionResults [] Nothing = (Just True, Nothing)
 checkConjunctionResults [] indeterminateArea@(Just _) = (Nothing, indeterminateArea)
 checkConjunctionResults (result : results) mIndeterminateArea =
@@ -357,7 +374,8 @@ checkConjunctionResults (result : results) mIndeterminateArea =
     (Nothing, indeterminateArea@(Just _)) -> checkConjunctionResults results indeterminateArea
     (Nothing, Nothing) -> undefined
 
-
+-- |Substitute all variable-defining equalities in a given conjunction.
+-- Simplify the conjunction after substituting all variable-defining equalities.
 substituteConjunctionEqualities :: [E.ESafe] -> [E.ESafe]
 substituteConjunctionEqualities [] = []
 substituteConjunctionEqualities conjunction@(conjunctionHead : conjunctionTail) =
