@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+- Split up single Type.hs module into smaller and better encapsulated modules
+
 ## [v0.0.2.0](https://github.com/rasheedja/PropaFP/compare/v0.0.2.0...v0.0.1)
 
 - Replace minView with maxView in 'model search' mode

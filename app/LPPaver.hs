@@ -2,7 +2,7 @@ module Main where
 
 import MixedTypesNumPrelude
 import AERN2.MP.Ball
-import LPPaver.Type
+import LPPaver.Decide.Algorithm
 import PropaFP.Expression
 import PropaFP.Eliminator
 import PropaFP.VarMap
