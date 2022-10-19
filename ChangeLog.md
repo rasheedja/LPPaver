@@ -3,6 +3,8 @@
 ## Unreleased changes
 
 - Split up single Type.hs module into smaller and better encapsulated modules
+- Add constraintRightSide to LPPaver.Constraint.Util
+- Document LPPaver.Constraint.Type and LPPaver.Constraint.Util
 
 ## [v0.0.2.0](https://github.com/rasheedja/PropaFP/compare/v0.0.2.0...v0.0.1)
 
