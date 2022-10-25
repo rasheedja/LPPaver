@@ -1,3 +1,12 @@
+{-|
+Module      : LPPaver.Decide.Util
+Description : Utility functions for LPPaver.Decide modules
+Copyright   : (c) Junaid Rasheed, 2021-2022
+License     : MPL
+Maintainer  : jrasheed178@gmail.com
+Stability   : experimental
+Module defining useful utility functions for the LPPaver.Decide modules
+-}
 module LPPaver.Decide.Util where
 
 import MixedTypesNumPrelude

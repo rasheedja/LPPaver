@@ -1,6 +1,6 @@
 {-|
 Module      : LPPaver.Constraint.Util
-Description : Utility function for the 'Constraint' type
+Description : Utility functions for the 'Constraint' type
 Copyright   : (c) Junaid Rasheed, 2021-2022
 License     : MPL
 Maintainer  : jrasheed178@gmail.com
