@@ -1,0 +1,848 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : LPPaver.Decide.Linearisation
+Description : Linearisations for conjunctions
+Copyright   : (c) Junaid Rasheed, 2021-2022
+License     : MPL
+Maintainer  : jrasheed178@gmail.com
+Stability   : experimental
+Module defining linearisations for conjunctions of 'E.ESafe' terms.
+-}</span><span>
+</span><span id="line-10"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">LPPaver.Decide.Linearisation</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-11"></span><span>
+</span><span id="line-12"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">MixedTypesNumPrelude</span></span><span>
+</span><span id="line-13"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">PropaFP.Expression</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">E</span></span><span>
+</span><span id="line-14"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">PropaFP.VarMap</span></span><span>
+</span><span id="line-15"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">AERN2.MP</span></span><span>
+</span><span id="line-16"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">AERN2.MP.Precision</span></span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">AERN2.BoxFun.Type</span></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">AERN2.BoxFun.Box</span></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.PQueue.Prio.Max</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">Q</span></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">PropaFP.Translators.BoxFun</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Control.Parallel.Strategies</span></span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.List</span></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Map</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">M</span></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Linear.Simplex.Simplex</span></span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Linear.Simplex.Util</span></span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Linear.Simplex.Types</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">LT</span></span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LPPaver.Decide.Util.html"><span class="hs-identifier">LPPaver.Decide.Util</span></a></span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LPPaver.Constraint.Type.html"><span class="hs-identifier">LPPaver.Constraint.Type</span></a></span><span>
+</span><span id="line-31"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><a href="LPPaver.Constraint.Util.html"><span class="hs-identifier">LPPaver.Constraint.Util</span></a></span><span>
+</span><span id="line-32"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">AERN2.Linear.Vector.Type</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">V</span></span><span>
+</span><span id="line-33"></span><span class="hs-keyword">import</span><span> </span><span class="annot"><span class="hs-identifier">Data.Bifunctor</span></span><span>
+</span><span id="line-34"></span><span>
+</span><span id="line-35"></span><span class="hs-comment">-- |Remove unsat areas from a conjunction arising from a DNF by weakening the conjunction using 'createConstraintsToRemoveConjunctionUnsatArea'.</span><span>
+</span><span id="line-36"></span><span class="hs-comment">-- The resulting linear system is solved and optimised by the two-phase simplex method.</span><span>
+</span><span id="line-37"></span><span class="hs-comment">-- If the linear system is infeasible, the entire conjunction was unsatisfiable.</span><span>
+</span><span id="line-38"></span><span class="annot"><a href="LPPaver.Decide.Linearisation.html#removeConjunctionUnsatAreaWithSimplex"><span class="hs-identifier hs-type">removeConjunctionUnsatAreaWithSimplex</span></a></span><span> </span><span>
+</span><span id="line-39"></span><span>  </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Box</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>  </span><span class="hs-comment">-- ^ A list of values needed to linearise each term in the conjunction. </span><span>
+</span><span id="line-40"></span><span>                                    </span><span class="hs-comment">-- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', </span><span>
+</span><span id="line-41"></span><span>                                    </span><span class="hs-comment">-- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', </span><span>
+</span><span id="line-42"></span><span>                                    </span><span class="hs-comment">-- and the third item are partial derivatives of the term over a 'VarMap'.</span><span>
+</span><span id="line-43"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">VarMap</span></span><span>                         </span><span class="hs-comment">-- ^ The VarMap over which we are examining the conjunction.</span><span>
+</span><span id="line-44"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">VarMap</span></span><span class="hs-special">)</span><span>     </span><span class="hs-comment">-- ^ The result of the simplex method on the resulting linear system.</span><span>
+</span><span id="line-45"></span><span>                                    </span><span class="hs-comment">-- (Just False, Nothing) is returned if the system is infeasible.</span><span>
+</span><span id="line-46"></span><span>                                    </span><span class="hs-comment">-- (Nothing, Just newArea) is returned if the system is feasible: newArea is an optimisation of the given 'VarMap'.</span><span>
+</span><span id="line-47"></span><span id="removeConjunctionUnsatAreaWithSimplex"><span class="annot"><span class="annottext">removeConjunctionUnsatAreaWithSimplex :: [(CN MPBall, CN MPBall, Box)]
+-&gt; VarMap -&gt; (Maybe Bool, Maybe VarMap)
+</span><a href="LPPaver.Decide.Linearisation.html#removeConjunctionUnsatAreaWithSimplex"><span class="hs-identifier hs-var hs-var">removeConjunctionUnsatAreaWithSimplex</span></a></span></span><span> </span><span id="local-6989586621679095387"><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095387"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span></span><span> </span><span id="local-6989586621679095386"><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095386"><span class="hs-identifier hs-var">varMap</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-48"></span><span>  </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Maybe VarMap
+</span><a href="#local-6989586621679095385"><span class="hs-identifier hs-var">mOptimizedVars</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-49"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679095384"><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095384"><span class="hs-identifier hs-var">optimizedVars</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Bool
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">VarMap -&gt; Maybe VarMap
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095384"><span class="hs-identifier hs-var">optimizedVars</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-50"></span><span>    </span><span class="annot"><span class="annottext">Maybe VarMap
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>            </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Maybe Bool
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Maybe VarMap
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span>
+</span><span id="line-51"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-52"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679095383"><span class="annot"><span class="annottext">[PolyConstraint]
+</span><a href="#local-6989586621679095383"><span class="hs-identifier hs-var">simplexSystem</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095382"><span class="annot"><span class="annottext">Map String Integer
+</span><a href="#local-6989586621679095382"><span class="hs-identifier hs-var">stringIntVarMap</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Constraint] -&gt; ([PolyConstraint], Map String Integer)
+</span><a href="LPPaver.Constraint.Util.html#constraintsToSimplexConstraints"><span class="hs-identifier hs-var">constraintsToSimplexConstraints</span></a></span><span> </span><span class="annot"><span class="annottext">([Constraint] -&gt; ([PolyConstraint], Map String Integer))
+-&gt; [Constraint] -&gt; ([PolyConstraint], Map String Integer)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)] -&gt; VarMap -&gt; [Constraint]
+</span><a href="LPPaver.Decide.Linearisation.html#createConstraintsToRemoveConjunctionUnsatArea"><span class="hs-identifier hs-var">createConstraintsToRemoveConjunctionUnsatArea</span></a></span><span> </span><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095387"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095386"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-53"></span><span>
+</span><span id="line-54"></span><span>    </span><span id="local-6989586621679095379"><span class="annot"><span class="annottext">vars :: [String]
+</span><a href="#local-6989586621679095379"><span class="hs-identifier hs-var hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; String) -&gt; VarMap -&gt; [String]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">(String, (Rational, Rational)) -&gt; String
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095386"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-55"></span><span>
+</span><span id="line-56"></span><span>    </span><span id="local-6989586621679095378"><span class="annot"><span class="annottext">mFeasibleSolution :: Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><a href="#local-6989586621679095378"><span class="hs-identifier hs-var hs-var">mFeasibleSolution</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[PolyConstraint]
+-&gt; Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><span class="hs-identifier hs-var">findFeasibleSolution</span></span><span> </span><span class="annot"><span class="annottext">[PolyConstraint]
+</span><a href="#local-6989586621679095383"><span class="hs-identifier hs-var">simplexSystem</span></a></span><span>
+</span><span id="line-57"></span><span>
+</span><span id="line-58"></span><span>
+</span><span id="line-59"></span><span>    </span><span class="hs-comment">-- Uses objective var to extract optimized values for each variable</span><span>
+</span><span id="line-60"></span><span>    </span><span class="annot"><a href="#local-6989586621679095376"><span class="hs-identifier hs-type">extractSimplexResult</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Rational</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Rational</span></span><span>
+</span><span id="line-61"></span><span>    </span><span id="local-6989586621679095376"><span class="annot"><span class="annottext">extractSimplexResult :: Maybe (Integer, [(Integer, Rational)]) -&gt; Rational
+</span><a href="#local-6989586621679095376"><span class="hs-identifier hs-var hs-var">extractSimplexResult</span></a></span></span><span> </span><span id="local-6989586621679095375"><span class="annot"><span class="annottext">Maybe (Integer, [(Integer, Rational)])
+</span><a href="#local-6989586621679095375"><span class="hs-identifier hs-var">maybeResult</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-62"></span><span>      </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Maybe (Integer, [(Integer, Rational)])
+</span><a href="#local-6989586621679095375"><span class="hs-identifier hs-var">maybeResult</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-63"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095374"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095374"><span class="hs-identifier hs-var">optimizedIntVar</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095373"><span class="annot"><span class="annottext">[(Integer, Rational)]
+</span><a href="#local-6989586621679095373"><span class="hs-identifier hs-var">result</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-comment">-- optimizedIntVar refers to the objective variable. We extract the value of the objective</span><span>
+</span><span id="line-64"></span><span>                                          </span><span class="hs-comment">-- variable from the result</span><span>
+</span><span id="line-65"></span><span>          </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Integer -&gt; [(Integer, Rational)] -&gt; Maybe Rational
+forall a b. Eq a =&gt; a -&gt; [(a, b)] -&gt; Maybe b
+</span><span class="hs-identifier hs-var">lookup</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095374"><span class="hs-identifier hs-var">optimizedIntVar</span></a></span><span> </span><span class="annot"><span class="annottext">[(Integer, Rational)]
+</span><a href="#local-6989586621679095373"><span class="hs-identifier hs-var">result</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-66"></span><span>            </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679095371"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095371"><span class="hs-identifier hs-var">optimizedVarResult</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095371"><span class="hs-identifier hs-var">optimizedVarResult</span></a></span><span>
+</span><span id="line-67"></span><span>            </span><span class="annot"><span class="annottext">Maybe Rational
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; Rational
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Extracting simplex result after finding feasible solution resulted in an infeasible result. This should not happen.&quot;</span></span><span>
+</span><span id="line-68"></span><span>        </span><span class="annot"><span class="annottext">Maybe (Integer, [(Integer, Rational)])
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; Rational
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Could not optimize feasible system. This should not happen.&quot;</span></span><span>
+</span><span id="line-69"></span><span>
+</span><span id="line-70"></span><span>    </span><span id="local-6989586621679095385"><span class="annot"><span class="annottext">mOptimizedVars :: Maybe VarMap
+</span><a href="#local-6989586621679095385"><span class="hs-identifier hs-var hs-var">mOptimizedVars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-71"></span><span>      </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><a href="#local-6989586621679095378"><span class="hs-identifier hs-var">mFeasibleSolution</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-72"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095369"><span class="annot"><span class="annottext">DictionaryForm
+</span><a href="#local-6989586621679095369"><span class="hs-identifier hs-var">feasibleSystem</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095368"><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095368"><span class="hs-identifier hs-var">slackVars</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095367"><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095367"><span class="hs-identifier hs-var">artificialVars</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095366"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095366"><span class="hs-identifier hs-var">objectiveVar</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-73"></span><span>          </span><span class="annot"><span class="annottext">VarMap -&gt; Maybe VarMap
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(VarMap -&gt; Maybe VarMap) -&gt; VarMap -&gt; Maybe VarMap
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-74"></span><span>          </span><span class="annot"><span class="annottext">(String -&gt; (String, (Rational, Rational))) -&gt; [String] -&gt; VarMap
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-comment">-- Optimize (minimize and maximize) all variables in the varMap</span><span>
+</span><span id="line-75"></span><span>          </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679095365"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095365"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-76"></span><span>            </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">String -&gt; Map String Integer -&gt; Maybe Integer
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095365"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">Map String Integer
+</span><a href="#local-6989586621679095382"><span class="hs-identifier hs-var">stringIntVarMap</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-77"></span><span>              </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679095363"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095363"><span class="hs-identifier hs-var">intVar</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-78"></span><span>                </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">String -&gt; VarMap -&gt; Maybe (Rational, Rational)
+forall a b. Eq a =&gt; a -&gt; [(a, b)] -&gt; Maybe b
+</span><span class="hs-identifier hs-var">lookup</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095365"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095386"><span class="hs-identifier hs-var">varMap</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-79"></span><span>                  </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095362"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095362"><span class="hs-identifier hs-var">originalL</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-comment">-- In the simplex system, the original lower bound of each var was shifted to 0. We undo this shift after optimization.</span><span>
+</span><span id="line-80"></span><span>                    </span><span class="hs-special">(</span><span>
+</span><span id="line-81"></span><span>                      </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095365"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-82"></span><span>                      </span><span class="hs-special">(</span><span>
+</span><span id="line-83"></span><span>                        </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095362"><span class="hs-identifier hs-var">originalL</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; AddType Rational Rational
+forall t1 t2. CanAddAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; AddType t1 t2
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Integer, [(Integer, Rational)]) -&gt; Rational
+</span><a href="#local-6989586621679095376"><span class="hs-identifier hs-var">extractSimplexResult</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ObjectiveFunction
+-&gt; DictionaryForm
+-&gt; [Integer]
+-&gt; [Integer]
+-&gt; Integer
+-&gt; Maybe (Integer, [(Integer, Rational)])
+</span><span class="hs-identifier hs-var">optimizeFeasibleSystem</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[(Integer, Rational)] -&gt; ObjectiveFunction
+</span><span class="hs-identifier hs-var">LT.Min</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095363"><span class="hs-identifier hs-var">intVar</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">DictionaryForm
+</span><a href="#local-6989586621679095369"><span class="hs-identifier hs-var">feasibleSystem</span></a></span><span> </span><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095368"><span class="hs-identifier hs-var">slackVars</span></a></span><span> </span><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095367"><span class="hs-identifier hs-var">artificialVars</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095366"><span class="hs-identifier hs-var">objectiveVar</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-84"></span><span>                        </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095362"><span class="hs-identifier hs-var">originalL</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; AddType Rational Rational
+forall t1 t2. CanAddAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; AddType t1 t2
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Integer, [(Integer, Rational)]) -&gt; Rational
+</span><a href="#local-6989586621679095376"><span class="hs-identifier hs-var">extractSimplexResult</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ObjectiveFunction
+-&gt; DictionaryForm
+-&gt; [Integer]
+-&gt; [Integer]
+-&gt; Integer
+-&gt; Maybe (Integer, [(Integer, Rational)])
+</span><span class="hs-identifier hs-var">optimizeFeasibleSystem</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[(Integer, Rational)] -&gt; ObjectiveFunction
+</span><span class="hs-identifier hs-var">LT.Max</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095363"><span class="hs-identifier hs-var">intVar</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">DictionaryForm
+</span><a href="#local-6989586621679095369"><span class="hs-identifier hs-var">feasibleSystem</span></a></span><span> </span><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095368"><span class="hs-identifier hs-var">slackVars</span></a></span><span> </span><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095367"><span class="hs-identifier hs-var">artificialVars</span></a></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095366"><span class="hs-identifier hs-var">objectiveVar</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-85"></span><span>                      </span><span class="hs-special">)</span><span>
+</span><span id="line-86"></span><span>                    </span><span class="hs-special">)</span><span>
+</span><span id="line-87"></span><span>                  </span><span class="annot"><span class="annottext">Maybe (Rational, Rational)
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; (String, (Rational, Rational))
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Optimized var not found in original varMap. This should not happen.&quot;</span></span><span>
+</span><span id="line-88"></span><span>              </span><span class="annot"><span class="annottext">Maybe Integer
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; (String, (Rational, Rational))
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Integer version of var not found. This should not happen.&quot;</span></span><span>
+</span><span id="line-89"></span><span>          </span><span class="hs-special">)</span><span>
+</span><span id="line-90"></span><span>          </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679095379"><span class="hs-identifier hs-var">vars</span></a></span><span>
+</span><span id="line-91"></span><span>        </span><span class="annot"><span class="annottext">Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe VarMap
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-92"></span><span>
+</span><span id="line-93"></span><span class="hs-comment">-- |Find a satisfiable point from a conjunction arising from a DNF by strengthening the conjunction using 'createConstraintsToFindSatSolution'.</span><span>
+</span><span id="line-94"></span><span class="hs-comment">-- The resulting linear system is solved by the first phase of the two-phase simplex method.</span><span>
+</span><span id="line-95"></span><span class="annot"><a href="LPPaver.Decide.Linearisation.html#findConjunctionSatAreaWithSimplex"><span class="hs-identifier hs-type">findConjunctionSatAreaWithSimplex</span></a></span><span> </span><span>
+</span><span id="line-96"></span><span>  </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Box</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>  </span><span class="hs-comment">-- ^ A list of values needed to linearise each term in the conjunction. </span><span>
+</span><span id="line-97"></span><span>                                    </span><span class="hs-comment">-- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', </span><span>
+</span><span id="line-98"></span><span>                                    </span><span class="hs-comment">-- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', </span><span>
+</span><span id="line-99"></span><span>                                    </span><span class="hs-comment">-- and the third item are partial derivatives of the term over a 'VarMap'.</span><span>
+</span><span id="line-100"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">VarMap</span></span><span>                         </span><span class="hs-comment">-- ^ The VarMap over which we are examining the conjunction.</span><span>
+</span><span id="line-101"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>                           </span><span class="hs-comment">-- ^ A boolean used to determine which 'extreme' corner to strengthen the conjunction from.</span><span>
+</span><span id="line-102"></span><span>                                    </span><span class="hs-comment">-- If true, linearise from the 'extreme' left corner and vice versa.</span><span>
+</span><span id="line-103"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">VarMap</span></span><span>                   </span><span class="hs-comment">-- ^ The result. If this is Nothing, no satisfiable point was found.</span><span>
+</span><span id="line-104"></span><span id="findConjunctionSatAreaWithSimplex"><span class="annot"><span class="annottext">findConjunctionSatAreaWithSimplex :: [(CN MPBall, CN MPBall, Box)] -&gt; VarMap -&gt; Bool -&gt; Maybe VarMap
+</span><a href="LPPaver.Decide.Linearisation.html#findConjunctionSatAreaWithSimplex"><span class="hs-identifier hs-var hs-var">findConjunctionSatAreaWithSimplex</span></a></span></span><span> </span><span id="local-6989586621679095356"><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095356"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span></span><span> </span><span id="local-6989586621679095355"><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095355"><span class="hs-identifier hs-var">varMap</span></a></span></span><span> </span><span id="local-6989586621679095354"><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679095354"><span class="hs-identifier hs-var">isLeftCorner</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-105"></span><span>  </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Maybe [(Integer, Rational)]
+</span><a href="#local-6989586621679095353"><span class="hs-identifier hs-var">mFeasibleVars</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-106"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679095352"><span class="annot"><span class="annottext">[(Integer, Rational)]
+</span><a href="#local-6989586621679095352"><span class="hs-identifier hs-var">newPoints</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-107"></span><span>      </span><span class="annot"><span class="annottext">VarMap -&gt; Maybe VarMap
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span>
+</span><span id="line-108"></span><span>      </span><span class="annot"><span class="annottext">(VarMap -&gt; Maybe VarMap) -&gt; VarMap -&gt; Maybe VarMap
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-109"></span><span>      </span><span class="annot"><span class="annottext">(String -&gt; (String, (Rational, Rational))) -&gt; [String] -&gt; VarMap
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span>
+</span><span id="line-110"></span><span>      </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679095351"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095351"><span class="hs-identifier hs-var">var</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-111"></span><span>        </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">String -&gt; Map String Integer -&gt; Maybe Integer
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095351"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">Map String Integer
+</span><a href="#local-6989586621679095350"><span class="hs-identifier hs-var">stringIntVarMap</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-112"></span><span>          </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679095349"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095349"><span class="hs-identifier hs-var">intVar</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-113"></span><span>            </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">String -&gt; VarMap -&gt; Maybe (Rational, Rational)
+forall a b. Eq a =&gt; a -&gt; [(a, b)] -&gt; Maybe b
+</span><span class="hs-identifier hs-var">lookup</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095351"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095355"><span class="hs-identifier hs-var">varMap</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-114"></span><span>              </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095348"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095348"><span class="hs-identifier hs-var">originalL</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-comment">-- In the simplex system, the original lower bound of each var was shifted to 0. We undo this shift after finding a feasible solution</span><span>
+</span><span id="line-115"></span><span>                </span><span class="hs-special">(</span><span>
+</span><span id="line-116"></span><span>                  </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095351"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-117"></span><span>                  </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679095347"><span class="annot"><span class="annottext">feasiblePoint :: AddType Rational Rational
+</span><a href="#local-6989586621679095347"><span class="hs-identifier hs-var hs-var">feasiblePoint</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095348"><span class="hs-identifier hs-var">originalL</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; AddType Rational Rational
+forall t1 t2. CanAddAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; AddType t1 t2
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Maybe Rational -&gt; Rational
+forall a. a -&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromMaybe</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">0.0</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Integer -&gt; [(Integer, Rational)] -&gt; Maybe Rational
+forall a b. Eq a =&gt; a -&gt; [(a, b)] -&gt; Maybe b
+</span><span class="hs-identifier hs-var">lookup</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095349"><span class="hs-identifier hs-var">intVar</span></a></span><span> </span><span class="annot"><span class="annottext">[(Integer, Rational)]
+</span><a href="#local-6989586621679095352"><span class="hs-identifier hs-var">newPoints</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-118"></span><span>                  </span><span class="hs-keyword">in</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Rational
+AddType Rational Rational
+</span><a href="#local-6989586621679095347"><span class="hs-identifier hs-var">feasiblePoint</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+AddType Rational Rational
+</span><a href="#local-6989586621679095347"><span class="hs-identifier hs-var">feasiblePoint</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-119"></span><span>                </span><span class="hs-special">)</span><span>
+</span><span id="line-120"></span><span>              </span><span class="annot"><span class="annottext">Maybe (Rational, Rational)
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; (String, (Rational, Rational))
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Optimized var not found in original varMap. This should not happen.&quot;</span></span><span>
+</span><span id="line-121"></span><span>          </span><span class="annot"><span class="annottext">Maybe Integer
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; (String, (Rational, Rational))
+forall a. HasCallStack =&gt; String -&gt; a
+</span><span class="hs-identifier hs-var">error</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;Integer version of var not found. This should not happen.&quot;</span></span><span>
+</span><span id="line-122"></span><span>      </span><span class="hs-special">)</span><span>
+</span><span id="line-123"></span><span>      </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679095345"><span class="hs-identifier hs-var">vars</span></a></span><span>
+</span><span id="line-124"></span><span>    </span><span class="annot"><span class="annottext">Maybe [(Integer, Rational)]
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; Maybe VarMap -&gt; Maybe VarMap
+forall {p1} {p2}. p1 -&gt; p2 -&gt; p2
+</span><a href="LPPaver.Decide.Util.html#trace"><span class="hs-identifier hs-var">trace</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;no sat solution&quot;</span></span><span> </span><span class="annot"><span class="annottext">Maybe VarMap
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-125"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-126"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679095343"><span class="annot"><span class="annottext">[PolyConstraint]
+</span><a href="#local-6989586621679095343"><span class="hs-identifier hs-var">simplexSystem</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095350"><span class="annot"><span class="annottext">Map String Integer
+</span><a href="#local-6989586621679095350"><span class="hs-identifier hs-var">stringIntVarMap</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Constraint] -&gt; ([PolyConstraint], Map String Integer)
+</span><a href="LPPaver.Constraint.Util.html#constraintsToSimplexConstraints"><span class="hs-identifier hs-var">constraintsToSimplexConstraints</span></a></span><span> </span><span class="annot"><span class="annottext">([Constraint] -&gt; ([PolyConstraint], Map String Integer))
+-&gt; [Constraint] -&gt; ([PolyConstraint], Map String Integer)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)] -&gt; VarMap -&gt; Bool -&gt; [Constraint]
+</span><a href="LPPaver.Decide.Linearisation.html#createConstraintsToFindSatSolution"><span class="hs-identifier hs-var">createConstraintsToFindSatSolution</span></a></span><span> </span><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095356"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095355"><span class="hs-identifier hs-var">varMap</span></a></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679095354"><span class="hs-identifier hs-var">isLeftCorner</span></a></span><span>
+</span><span id="line-127"></span><span>
+</span><span id="line-128"></span><span>    </span><span id="local-6989586621679095345"><span class="annot"><span class="annottext">vars :: [String]
+</span><a href="#local-6989586621679095345"><span class="hs-identifier hs-var hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; String) -&gt; VarMap -&gt; [String]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">(String, (Rational, Rational)) -&gt; String
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095355"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-129"></span><span>
+</span><span id="line-130"></span><span>    </span><span id="local-6989586621679095341"><span class="annot"><span class="annottext">mFeasibleSolution :: Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><a href="#local-6989586621679095341"><span class="hs-identifier hs-var hs-var">mFeasibleSolution</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[PolyConstraint]
+-&gt; Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><span class="hs-identifier hs-var">findFeasibleSolution</span></span><span> </span><span class="annot"><span class="annottext">[PolyConstraint]
+</span><a href="#local-6989586621679095343"><span class="hs-identifier hs-var">simplexSystem</span></a></span><span>
+</span><span id="line-131"></span><span>
+</span><span id="line-132"></span><span>    </span><span id="local-6989586621679095353"><span class="annot"><span class="annottext">mFeasibleVars :: Maybe [(Integer, Rational)]
+</span><a href="#local-6989586621679095353"><span class="hs-identifier hs-var hs-var">mFeasibleVars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-133"></span><span>      </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><a href="#local-6989586621679095341"><span class="hs-identifier hs-var">mFeasibleSolution</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-134"></span><span>        </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095340"><span class="annot"><span class="annottext">DictionaryForm
+</span><a href="#local-6989586621679095340"><span class="hs-identifier hs-var">feasibleSystem</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095339"><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095339"><span class="hs-identifier hs-var">_slackVars</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095338"><span class="annot"><span class="annottext">[Integer]
+</span><a href="#local-6989586621679095338"><span class="hs-identifier hs-var">_artificialVars</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095337"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095337"><span class="hs-identifier hs-var">_objectiveVar</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">[(Integer, Rational)] -&gt; Maybe [(Integer, Rational)]
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">([(Integer, Rational)] -&gt; Maybe [(Integer, Rational)])
+-&gt; [(Integer, Rational)] -&gt; Maybe [(Integer, Rational)]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">DictionaryForm -&gt; [(Integer, Rational)]
+</span><span class="hs-identifier hs-var">displayDictionaryResults</span></span><span> </span><span class="annot"><span class="annottext">DictionaryForm
+</span><a href="#local-6989586621679095340"><span class="hs-identifier hs-var">feasibleSystem</span></a></span><span>
+</span><span id="line-135"></span><span>        </span><span class="annot"><span class="annottext">Maybe (DictionaryForm, [Integer], [Integer], Integer)
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe [(Integer, Rational)]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-136"></span><span>
+</span><span id="line-137"></span><span class="hs-comment">-- |Linearisations that weaken a conjunction of terms over some box.</span><span>
+</span><span id="line-138"></span><span class="annot"><a href="LPPaver.Decide.Linearisation.html#createConstraintsToRemoveConjunctionUnsatArea"><span class="hs-identifier hs-type">createConstraintsToRemoveConjunctionUnsatArea</span></a></span><span> </span><span>
+</span><span id="line-139"></span><span>  </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Box</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>  </span><span class="hs-comment">-- ^ A list of values needed to linearise each term in the conjunction. </span><span>
+</span><span id="line-140"></span><span>                                    </span><span class="hs-comment">-- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', </span><span>
+</span><span id="line-141"></span><span>                                    </span><span class="hs-comment">-- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', </span><span>
+</span><span id="line-142"></span><span>                                    </span><span class="hs-comment">-- and the third item are partial derivatives of the term over a 'VarMap'.</span><span>
+</span><span id="line-143"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">VarMap</span></span><span>                         </span><span class="hs-comment">-- ^ The VarMap over which we are examining the conjunction.</span><span>
+</span><span id="line-144"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LPPaver.Constraint.Type.html#Constraint"><span class="hs-identifier hs-type">Constraint</span></a></span><span class="hs-special">]</span><span>                   </span><span class="hs-comment">-- ^ An implicit linear system that is a weakening of the conjunction.</span><span>
+</span><span id="line-145"></span><span id="createConstraintsToRemoveConjunctionUnsatArea"><span class="annot"><span class="annottext">createConstraintsToRemoveConjunctionUnsatArea :: [(CN MPBall, CN MPBall, Box)] -&gt; VarMap -&gt; [Constraint]
+</span><a href="LPPaver.Decide.Linearisation.html#createConstraintsToRemoveConjunctionUnsatArea"><span class="hs-identifier hs-var hs-var">createConstraintsToRemoveConjunctionUnsatArea</span></a></span></span><span> </span><span id="local-6989586621679095335"><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095335"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span></span><span> </span><span id="local-6989586621679095334"><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095334"><span class="hs-identifier hs-var">varMap</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-146"></span><span>  </span><span class="annot"><span class="annottext">[Constraint]
+</span><a href="#local-6989586621679095333"><span class="hs-identifier hs-var">domainConstraints</span></a></span><span> </span><span class="annot"><span class="annottext">[Constraint] -&gt; [Constraint] -&gt; [Constraint]
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">[Constraint]
+</span><a href="#local-6989586621679095332"><span class="hs-identifier hs-var">functionConstraints</span></a></span><span>
+</span><span id="line-147"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-148"></span><span>    </span><span id="local-6989586621679095331"><span class="annot"><span class="annottext">vars :: [String]
+</span><a href="#local-6989586621679095331"><span class="hs-identifier hs-var hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; String) -&gt; VarMap -&gt; [String]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">(String, (Rational, Rational)) -&gt; String
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095334"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-149"></span><span>    </span><span id="local-6989586621679095330"><span class="annot"><span class="annottext">varsNewUpperBounds :: [Rational]
+</span><a href="#local-6989586621679095330"><span class="hs-identifier hs-var hs-var">varsNewUpperBounds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; Rational)
+-&gt; VarMap -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><span class="hs-identifier">_</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095329"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095329"><span class="hs-identifier hs-var">l</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095328"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095328"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095328"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; SubType Rational Rational
+forall t1 t2. CanSub t1 t2 =&gt; t1 -&gt; t2 -&gt; SubType t1 t2
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095329"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095334"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-150"></span><span>
+</span><span id="line-151"></span><span>    </span><span class="hs-comment">-- var &gt;= varLower - varLower &amp;&amp; var &lt;= varUpper - varLower</span><span>
+</span><span id="line-152"></span><span>    </span><span class="hs-comment">-- Since var &gt;= 0 is assumed by the simplex method, var &gt;= varLower - varLower is not needed</span><span>
+</span><span id="line-153"></span><span>    </span><span id="local-6989586621679095333"><span class="annot"><span class="annottext">domainConstraints :: [Constraint]
+</span><a href="#local-6989586621679095333"><span class="hs-identifier hs-var hs-var">domainConstraints</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-154"></span><span>      </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; Constraint)
+-&gt; VarMap -&gt; [Constraint]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span>
+</span><span id="line-155"></span><span>      </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679095326"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095326"><span class="hs-identifier hs-var">var</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095325"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095325"><span class="hs-identifier hs-var">varLower</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095324"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095324"><span class="hs-identifier hs-var">varUpper</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-156"></span><span>        </span><span class="annot"><span class="annottext">[(String, Rational)] -&gt; Rational -&gt; Constraint
+</span><a href="LPPaver.Constraint.Type.html#LEQ"><span class="hs-identifier hs-var">LEQ</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095326"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Constraint) -&gt; Rational -&gt; Constraint
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095324"><span class="hs-identifier hs-var">varUpper</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; SubType Rational Rational
+forall t1 t2. CanSub t1 t2 =&gt; t1 -&gt; t2 -&gt; SubType t1 t2
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095325"><span class="hs-identifier hs-var">varLower</span></a></span><span>
+</span><span id="line-157"></span><span>      </span><span class="hs-special">)</span><span>
+</span><span id="line-158"></span><span>      </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095334"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-159"></span><span>
+</span><span id="line-160"></span><span>    </span><span class="hs-comment">-- The following constraints in this variable are...</span><span>
+</span><span id="line-161"></span><span>    </span><span class="hs-comment">--  fn - (fnx1GradientR * x1) - .. - (fnxnGradientR * xn) &lt;= fnLeftCorner + (fnx1GradientR * -x1L) + .. + (fnxnGradientR * -xnL)</span><span>
+</span><span id="line-162"></span><span>    </span><span class="hs-comment">--  fn - (fnx1GradientL * x1) - .. - (fnxnGradientL * xn) &lt;= fnRightCorner + (-fnx1GradientL * x1R) + .. + (-fnxnGradientL * xnR)</span><span>
+</span><span id="line-163"></span><span>    </span><span class="hs-comment">-- and these are equivalent to...</span><span>
+</span><span id="line-164"></span><span>    </span><span class="hs-comment">--  fn &lt;= fnLeftCorner  + (fnx1GradientR  * (x1 - x1L)) + .. + (fnxnGradientR * (xn - xnL))</span><span>
+</span><span id="line-165"></span><span>    </span><span class="hs-comment">--  fn &lt;= fnRightCorner + (-fnx1GradientL * (x1R - x1)) + .. + (-fnxnGradientL * (xnR - xn))</span><span>
+</span><span id="line-166"></span><span>    </span><span class="hs-comment">-- </span><span>
+</span><span id="line-167"></span><span>    </span><span id="local-6989586621679095332"><span class="annot"><span class="annottext">functionConstraints :: [Constraint]
+</span><a href="#local-6989586621679095332"><span class="hs-identifier hs-var hs-var">functionConstraints</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-168"></span><span>      </span><span class="annot"><span class="annottext">((Integer, (CN MPBall, CN MPBall, Box)) -&gt; [Constraint])
+-&gt; [(Integer, (CN MPBall, CN MPBall, Box))] -&gt; [Constraint]
+forall (t :: * -&gt; *) a b. Foldable t =&gt; (a -&gt; [b]) -&gt; t a -&gt; [b]
+</span><span class="hs-identifier hs-var">concatMap</span></span><span>
+</span><span id="line-169"></span><span>      </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679095321"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095321"><span class="hs-identifier hs-var">fnInt</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095320"><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095320"><span class="hs-identifier hs-var">fLeftRange</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095319"><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095319"><span class="hs-identifier hs-var">fRightRange</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095318"><span class="annot"><span class="annottext">Box
+</span><a href="#local-6989586621679095318"><span class="hs-identifier hs-var">fPartialDerivatives</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-170"></span><span>        </span><span class="hs-keyword">let</span><span>
+</span><span id="line-171"></span><span>          </span><span id="local-6989586621679095317"><span class="annot"><span class="annottext">fNegatedPartialDerivativesLowerBounds :: [Rational]
+</span><a href="#local-6989586621679095317"><span class="hs-identifier hs-var hs-var">fNegatedPartialDerivativesLowerBounds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(CN MPBall -&gt; Rational) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Rational -&gt; Rational
+forall t. CanNeg t =&gt; t -&gt; NegType t
+</span><span class="hs-identifier hs-var">negate</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational)
+-&gt; (CN MPBall -&gt; Rational) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (CN MPBall -&gt; (Rational, Rational)) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095314"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([CN MPBall] -&gt; [Rational]) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Box -&gt; [CN MPBall]
+forall a. Vector a -&gt; [a]
+</span><span class="hs-identifier hs-var">V.toList</span></span><span> </span><span class="annot"><span class="annottext">Box
+</span><a href="#local-6989586621679095318"><span class="hs-identifier hs-var">fPartialDerivatives</span></a></span><span>
+</span><span id="line-172"></span><span>          </span><span id="local-6989586621679095312"><span class="annot"><span class="annottext">fNegatedPartialDerivativesUpperBounds :: [Rational]
+</span><a href="#local-6989586621679095312"><span class="hs-identifier hs-var hs-var">fNegatedPartialDerivativesUpperBounds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(CN MPBall -&gt; Rational) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Rational -&gt; Rational
+forall t. CanNeg t =&gt; t -&gt; NegType t
+</span><span class="hs-identifier hs-var">negate</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational)
+-&gt; (CN MPBall -&gt; Rational) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (CN MPBall -&gt; (Rational, Rational)) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095314"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([CN MPBall] -&gt; [Rational]) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Box -&gt; [CN MPBall]
+forall a. Vector a -&gt; [a]
+</span><span class="hs-identifier hs-var">V.toList</span></span><span> </span><span class="annot"><span class="annottext">Box
+</span><a href="#local-6989586621679095318"><span class="hs-identifier hs-var">fPartialDerivatives</span></a></span><span>
+</span><span id="line-173"></span><span>          </span><span id="local-6989586621679095311"><span class="annot"><span class="annottext">fLeftUpperBound :: Rational
+</span><a href="#local-6989586621679095311"><span class="hs-identifier hs-var hs-var">fLeftUpperBound</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (Rational, Rational) -&gt; Rational
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095314"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span> </span><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095320"><span class="hs-identifier hs-var">fLeftRange</span></a></span><span>
+</span><span id="line-174"></span><span>          </span><span id="local-6989586621679095310"><span class="annot"><span class="annottext">fRightUpperBound :: Rational
+</span><a href="#local-6989586621679095310"><span class="hs-identifier hs-var hs-var">fRightUpperBound</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (Rational, Rational) -&gt; Rational
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095314"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span> </span><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095319"><span class="hs-identifier hs-var">fRightRange</span></a></span><span>
+</span><span id="line-175"></span><span>
+</span><span id="line-176"></span><span>          </span><span class="hs-comment">--FIXME: make this safe. Check if vars contain ^fSimplex[0-9]+$. If so, try ^fSimplex1[0-9]+$ or something</span><span>
+</span><span id="line-177"></span><span>          </span><span id="local-6989586621679095309"><span class="annot"><span class="annottext">fSimplexN :: String
+</span><a href="#local-6989586621679095309"><span class="hs-identifier hs-var hs-var">fSimplexN</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;fSimplex&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095321"><span class="hs-identifier hs-var">fnInt</span></a></span><span>
+</span><span id="line-178"></span><span>        </span><span class="hs-keyword">in</span><span>
+</span><span id="line-179"></span><span>          </span><span class="hs-special">[</span><span>
+</span><span id="line-180"></span><span>            </span><span class="hs-comment">-- f is definitely below this line from the left corner</span><span>
+</span><span id="line-181"></span><span>            </span><span class="hs-comment">-- Multiplication with left corner and partial derivatives omitted, since left corner is zero</span><span>
+</span><span id="line-182"></span><span>            </span><span class="annot"><span class="annottext">[(String, Rational)] -&gt; Rational -&gt; Constraint
+</span><a href="LPPaver.Constraint.Type.html#LEQ"><span class="hs-identifier hs-var">LEQ</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095309"><span class="hs-identifier hs-var">fSimplexN</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(String, Rational) -&gt; [(String, Rational)] -&gt; [(String, Rational)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">[String] -&gt; [Rational] -&gt; [(String, Rational)]
+forall a b. [a] -&gt; [b] -&gt; [(a, b)]
+</span><span class="hs-identifier hs-var">zip</span></span><span> </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679095331"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095312"><span class="hs-identifier hs-var">fNegatedPartialDerivativesUpperBounds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-183"></span><span>              </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095311"><span class="hs-identifier hs-var">fLeftUpperBound</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-184"></span><span>            </span><span class="hs-comment">-- f is definitely below this line from the right corner</span><span>
+</span><span id="line-185"></span><span>            </span><span class="annot"><span class="annottext">[(String, Rational)] -&gt; Rational -&gt; Constraint
+</span><a href="LPPaver.Constraint.Type.html#LEQ"><span class="hs-identifier hs-var">LEQ</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095309"><span class="hs-identifier hs-var">fSimplexN</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(String, Rational) -&gt; [(String, Rational)] -&gt; [(String, Rational)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">[String] -&gt; [Rational] -&gt; [(String, Rational)]
+forall a b. [a] -&gt; [b] -&gt; [(a, b)]
+</span><span class="hs-identifier hs-var">zip</span></span><span> </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679095331"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095317"><span class="hs-identifier hs-var">fNegatedPartialDerivativesLowerBounds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-186"></span><span>              </span><span class="annot"><span class="annottext">(Rational -&gt; Constraint) -&gt; Rational -&gt; Constraint
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational -&gt; Rational)
+-&gt; Rational -&gt; [Rational] -&gt; Rational
+forall (t :: * -&gt; *) b a.
+Foldable t =&gt;
+(b -&gt; a -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldl</span></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; Rational
+forall t1 t2. CanAddAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; AddType t1 t2
+</span><span class="hs-identifier hs-var">add</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095310"><span class="hs-identifier hs-var">fRightUpperBound</span></a></span><span> </span><span class="annot"><span class="annottext">([Rational] -&gt; Rational) -&gt; [Rational] -&gt; Rational
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational -&gt; Rational)
+-&gt; [Rational] -&gt; [Rational] -&gt; [Rational]
+forall a b c. (a -&gt; b -&gt; c) -&gt; [a] -&gt; [b] -&gt; [c]
+</span><span class="hs-identifier hs-var">zipWith</span></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; Rational
+forall t1 t2. CanMulAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; MulType t1 t2
+</span><span class="hs-identifier hs-var">mul</span></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095330"><span class="hs-identifier hs-var">varsNewUpperBounds</span></a></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095317"><span class="hs-identifier hs-var">fNegatedPartialDerivativesLowerBounds</span></a></span><span>
+</span><span id="line-187"></span><span>          </span><span class="hs-special">]</span><span>
+</span><span id="line-188"></span><span>      </span><span class="hs-special">)</span><span>
+</span><span id="line-189"></span><span>      </span><span class="annot"><span class="annottext">([(Integer, (CN MPBall, CN MPBall, Box))] -&gt; [Constraint])
+-&gt; [(Integer, (CN MPBall, CN MPBall, Box))] -&gt; [Constraint]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-190"></span><span>      </span><span class="annot"><span class="annottext">[Integer]
+-&gt; [(CN MPBall, CN MPBall, Box)]
+-&gt; [(Integer, (CN MPBall, CN MPBall, Box))]
+forall a b. [a] -&gt; [b] -&gt; [(a, b)]
+</span><span class="hs-identifier hs-var">zip</span></span><span>
+</span><span id="line-191"></span><span>      </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">1</span></span><span class="hs-glyph">..</span><span class="hs-special">]</span><span>
+</span><span id="line-192"></span><span>      </span><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095335"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span><span>
+</span><span id="line-193"></span><span>
+</span><span id="line-194"></span><span>    </span><span class="annot"><a href="#local-6989586621679095314"><span class="hs-identifier hs-type">mpBallToRational</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Rational</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Rational</span></span><span class="hs-special">)</span><span>
+</span><span id="line-195"></span><span>    </span><span id="local-6989586621679095314"><span class="annot"><span class="annottext">mpBallToRational :: CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095314"><span class="hs-identifier hs-var hs-var">mpBallToRational</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(MPFloat -&gt; Rational)
+-&gt; (MPFloat -&gt; Rational)
+-&gt; (MPFloat, MPFloat)
+-&gt; (Rational, Rational)
+forall (p :: * -&gt; * -&gt; *) a b c d.
+Bifunctor p =&gt;
+(a -&gt; b) -&gt; (c -&gt; d) -&gt; p a c -&gt; p b d
+</span><span class="hs-identifier hs-var">bimap</span></span><span> </span><span class="annot"><span class="annottext">MPFloat -&gt; Rational
+forall t. CanBeRational t =&gt; t -&gt; Rational
+</span><span class="hs-identifier hs-var">rational</span></span><span> </span><span class="annot"><span class="annottext">MPFloat -&gt; Rational
+forall t. CanBeRational t =&gt; t -&gt; Rational
+</span><span class="hs-identifier hs-var">rational</span></span><span> </span><span class="annot"><span class="annottext">((MPFloat, MPFloat) -&gt; (Rational, Rational))
+-&gt; (CN MPBall -&gt; (MPFloat, MPFloat))
+-&gt; CN MPBall
+-&gt; (Rational, Rational)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">MPBall -&gt; (MPFloat, MPFloat)
+forall i.
+IsInterval i =&gt;
+i -&gt; (IntervalEndpoint i, IntervalEndpoint i)
+</span><span class="hs-identifier hs-var">endpoints</span></span><span> </span><span class="annot"><span class="annottext">(MPBall -&gt; (MPFloat, MPFloat))
+-&gt; (CN MPBall -&gt; MPBall) -&gt; CN MPBall -&gt; (MPFloat, MPFloat)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">MPBall -&gt; MPBall
+</span><span class="hs-identifier hs-var">reducePrecionIfInaccurate</span></span><span> </span><span class="annot"><span class="annottext">(MPBall -&gt; MPBall) -&gt; (CN MPBall -&gt; MPBall) -&gt; CN MPBall -&gt; MPBall
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; MPBall
+forall p. CN p -&gt; p
+</span><span class="hs-identifier hs-var">unCN</span></span><span>
+</span><span id="line-196"></span><span>
+</span><span id="line-197"></span><span class="hs-comment">-- |Linearisations that strengthen a conjunction of terms over some box.</span><span>
+</span><span id="line-198"></span><span class="annot"><a href="LPPaver.Decide.Linearisation.html#createConstraintsToFindSatSolution"><span class="hs-identifier hs-type">createConstraintsToFindSatSolution</span></a></span><span>
+</span><span id="line-199"></span><span>  </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Box</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>  </span><span class="hs-comment">-- ^ A list of values needed to linearise each term in the conjunction. </span><span>
+</span><span id="line-200"></span><span>                                    </span><span class="hs-comment">-- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', </span><span>
+</span><span id="line-201"></span><span>                                    </span><span class="hs-comment">-- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', </span><span>
+</span><span id="line-202"></span><span>                                    </span><span class="hs-comment">-- and the third item are partial derivatives of the term over a 'VarMap'.</span><span>
+</span><span id="line-203"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">VarMap</span></span><span>                         </span><span class="hs-comment">-- ^ The VarMap over which we are examining the conjunction.</span><span>
+</span><span id="line-204"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>                           </span><span class="hs-comment">-- ^ A boolean used to determine which 'extreme' corner to strengthen the conjunction from.</span><span>
+</span><span id="line-205"></span><span>                                    </span><span class="hs-comment">-- If true, linearise from the 'extreme' left corner and vice versa.</span><span>
+</span><span id="line-206"></span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="LPPaver.Constraint.Type.html#Constraint"><span class="hs-identifier hs-type">Constraint</span></a></span><span class="hs-special">]</span><span>                   </span><span class="hs-comment">-- ^ An implicit linear system that is a weakening of the conjunction.</span><span>
+</span><span id="line-207"></span><span id="createConstraintsToFindSatSolution"><span class="annot"><span class="annottext">createConstraintsToFindSatSolution :: [(CN MPBall, CN MPBall, Box)] -&gt; VarMap -&gt; Bool -&gt; [Constraint]
+</span><a href="LPPaver.Decide.Linearisation.html#createConstraintsToFindSatSolution"><span class="hs-identifier hs-var hs-var">createConstraintsToFindSatSolution</span></a></span></span><span> </span><span id="local-6989586621679095298"><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095298"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span></span><span> </span><span id="local-6989586621679095297"><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095297"><span class="hs-identifier hs-var">varMap</span></a></span></span><span> </span><span id="local-6989586621679095296"><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679095296"><span class="hs-identifier hs-var">isLeftCorner</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-208"></span><span>  </span><span class="annot"><span class="annottext">[Constraint]
+</span><a href="#local-6989586621679095295"><span class="hs-identifier hs-var">domainConstraints</span></a></span><span> </span><span class="annot"><span class="annottext">[Constraint] -&gt; [Constraint] -&gt; [Constraint]
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">[Constraint]
+</span><a href="#local-6989586621679095294"><span class="hs-identifier hs-var">functionConstraints</span></a></span><span>
+</span><span id="line-209"></span><span>  </span><span class="hs-keyword">where</span><span>
+</span><span id="line-210"></span><span>    </span><span id="local-6989586621679095293"><span class="annot"><span class="annottext">vars :: [String]
+</span><a href="#local-6989586621679095293"><span class="hs-identifier hs-var hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; String) -&gt; VarMap -&gt; [String]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">(String, (Rational, Rational)) -&gt; String
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095297"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-211"></span><span>    </span><span id="local-6989586621679095292"><span class="annot"><span class="annottext">varsNewUpperBounds :: [Rational]
+</span><a href="#local-6989586621679095292"><span class="hs-identifier hs-var hs-var">varsNewUpperBounds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; Rational)
+-&gt; VarMap -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><span class="hs-identifier">_</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095291"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095291"><span class="hs-identifier hs-var">l</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095290"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095290"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095290"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; SubType Rational Rational
+forall t1 t2. CanSub t1 t2 =&gt; t1 -&gt; t2 -&gt; SubType t1 t2
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095291"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095297"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-212"></span><span>
+</span><span id="line-213"></span><span>    </span><span class="hs-comment">-- var &gt;= varLower - varLower &amp;&amp; var &lt;= varUpper - varLower</span><span>
+</span><span id="line-214"></span><span>    </span><span class="hs-comment">-- Since var &gt;= 0 is assumed by the simplex method, var &gt;= varLower - varLower is not needed</span><span>
+</span><span id="line-215"></span><span>    </span><span id="local-6989586621679095295"><span class="annot"><span class="annottext">domainConstraints :: [Constraint]
+</span><a href="#local-6989586621679095295"><span class="hs-identifier hs-var hs-var">domainConstraints</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-216"></span><span>      </span><span class="annot"><span class="annottext">((String, (Rational, Rational)) -&gt; Constraint)
+-&gt; VarMap -&gt; [Constraint]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span>
+</span><span id="line-217"></span><span>      </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679095289"><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095289"><span class="hs-identifier hs-var">var</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095288"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095288"><span class="hs-identifier hs-var">varLower</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095287"><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095287"><span class="hs-identifier hs-var">varUpper</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-218"></span><span>        </span><span class="annot"><span class="annottext">[(String, Rational)] -&gt; Rational -&gt; Constraint
+</span><a href="LPPaver.Constraint.Type.html#LEQ"><span class="hs-identifier hs-var">LEQ</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095289"><span class="hs-identifier hs-var">var</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Constraint) -&gt; Rational -&gt; Constraint
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095287"><span class="hs-identifier hs-var">varUpper</span></a></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; SubType Rational Rational
+forall t1 t2. CanSub t1 t2 =&gt; t1 -&gt; t2 -&gt; SubType t1 t2
+</span><span class="hs-glyph hs-var">-</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095288"><span class="hs-identifier hs-var">varLower</span></a></span><span>
+</span><span id="line-219"></span><span>      </span><span class="hs-special">)</span><span>
+</span><span id="line-220"></span><span>      </span><span class="annot"><span class="annottext">VarMap
+</span><a href="#local-6989586621679095297"><span class="hs-identifier hs-var">varMap</span></a></span><span>
+</span><span id="line-221"></span><span>
+</span><span id="line-222"></span><span>    </span><span class="hs-comment">-- The following constraints in this variable are...</span><span>
+</span><span id="line-223"></span><span>    </span><span class="hs-comment">--  Left  corner: fn - (fnx1GradientL * x1) - .. - (fnxnGradientL * xn) &lt;= fnLeftCorner  - (fnx1GradientL * x1L) - .. - (fnx1GradientL * x1L)</span><span>
+</span><span id="line-224"></span><span>    </span><span class="hs-comment">--  Right corner: fn - (fnx1GradientR * x1) - .. - (fnxnGradientR * xn) &lt;= fnRightCorner - (fnx1GradientR * x1R) - .. - (fnx1GradientR * x1R)</span><span>
+</span><span id="line-225"></span><span>    </span><span class="hs-comment">-- and these are equivalent to...</span><span>
+</span><span id="line-226"></span><span>    </span><span class="hs-comment">--  Left  corner: fn &lt;= fnLeftCorner + (fnx1GradientL * (x1 - x1L)) + .. + (fnxnGradientL * (xn - xnL))</span><span>
+</span><span id="line-227"></span><span>    </span><span class="hs-comment">--  Right corner: fn &lt;= ynRightCorner + (-fnx1GradientR * (xR - x)) + .. + (-fnxnGradientR * (xnR - xn))</span><span>
+</span><span id="line-228"></span><span>    </span><span id="local-6989586621679095294"><span class="annot"><span class="annottext">functionConstraints :: [Constraint]
+</span><a href="#local-6989586621679095294"><span class="hs-identifier hs-var hs-var">functionConstraints</span></a></span></span><span> </span><span class="hs-glyph">=</span><span>
+</span><span id="line-229"></span><span>      </span><span class="annot"><span class="annottext">(Integer -&gt; (CN MPBall, CN MPBall, Box) -&gt; Constraint)
+-&gt; [Integer] -&gt; [(CN MPBall, CN MPBall, Box)] -&gt; [Constraint]
+forall a b c. (a -&gt; b -&gt; c) -&gt; [a] -&gt; [b] -&gt; [c]
+</span><span class="hs-identifier hs-var">zipWith</span></span><span>
+</span><span id="line-230"></span><span>      </span><span class="hs-special">(</span><span class="annot"><span class="annottext">((Integer, (CN MPBall, CN MPBall, Box)) -&gt; Constraint)
+-&gt; Integer -&gt; (CN MPBall, CN MPBall, Box) -&gt; Constraint
+forall a b c. ((a, b) -&gt; c) -&gt; a -&gt; b -&gt; c
+</span><span class="hs-identifier hs-var">curry</span></span><span>
+</span><span id="line-231"></span><span>        </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679095285"><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095285"><span class="hs-identifier hs-var">fnInt</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679095284"><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095284"><span class="hs-identifier hs-var">fLeftRange</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095283"><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095283"><span class="hs-identifier hs-var">fRightRange</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679095282"><span class="annot"><span class="annottext">Box
+</span><a href="#local-6989586621679095282"><span class="hs-identifier hs-var">fPartialDerivatives</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-232"></span><span>          </span><span class="hs-keyword">let</span><span>
+</span><span id="line-233"></span><span>            </span><span id="local-6989586621679095281"><span class="annot"><span class="annottext">fNegatedPartialDerivativesLowerBounds :: [Rational]
+</span><a href="#local-6989586621679095281"><span class="hs-identifier hs-var hs-var">fNegatedPartialDerivativesLowerBounds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(CN MPBall -&gt; Rational) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Rational -&gt; Rational
+forall t. CanNeg t =&gt; t -&gt; NegType t
+</span><span class="hs-identifier hs-var">negate</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational)
+-&gt; (CN MPBall -&gt; Rational) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (CN MPBall -&gt; (Rational, Rational)) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095280"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([CN MPBall] -&gt; [Rational]) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Box -&gt; [CN MPBall]
+forall a. Vector a -&gt; [a]
+</span><span class="hs-identifier hs-var">V.toList</span></span><span> </span><span class="annot"><span class="annottext">Box
+</span><a href="#local-6989586621679095282"><span class="hs-identifier hs-var">fPartialDerivatives</span></a></span><span>
+</span><span id="line-234"></span><span>            </span><span id="local-6989586621679095279"><span class="annot"><span class="annottext">fNegatedPartialDerivativesUpperBounds :: [Rational]
+</span><a href="#local-6989586621679095279"><span class="hs-identifier hs-var hs-var">fNegatedPartialDerivativesUpperBounds</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(CN MPBall -&gt; Rational) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Rational -&gt; Rational
+forall t. CanNeg t =&gt; t -&gt; NegType t
+</span><span class="hs-identifier hs-var">negate</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational)
+-&gt; (CN MPBall -&gt; Rational) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (CN MPBall -&gt; (Rational, Rational)) -&gt; CN MPBall -&gt; Rational
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095280"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([CN MPBall] -&gt; [Rational]) -&gt; [CN MPBall] -&gt; [Rational]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Box -&gt; [CN MPBall]
+forall a. Vector a -&gt; [a]
+</span><span class="hs-identifier hs-var">V.toList</span></span><span> </span><span class="annot"><span class="annottext">Box
+</span><a href="#local-6989586621679095282"><span class="hs-identifier hs-var">fPartialDerivatives</span></a></span><span>
+</span><span id="line-235"></span><span>            </span><span id="local-6989586621679095278"><span class="annot"><span class="annottext">fLeftLowerBound :: Rational
+</span><a href="#local-6989586621679095278"><span class="hs-identifier hs-var hs-var">fLeftLowerBound</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (Rational, Rational) -&gt; Rational
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095280"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span> </span><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095284"><span class="hs-identifier hs-var">fLeftRange</span></a></span><span>
+</span><span id="line-236"></span><span>            </span><span id="local-6989586621679095277"><span class="annot"><span class="annottext">fRightLowerBound :: Rational
+</span><a href="#local-6989586621679095277"><span class="hs-identifier hs-var hs-var">fRightLowerBound</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Rational, Rational) -&gt; Rational
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">((Rational, Rational) -&gt; Rational)
+-&gt; (Rational, Rational) -&gt; Rational
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095280"><span class="hs-identifier hs-var">mpBallToRational</span></a></span><span> </span><span class="annot"><span class="annottext">CN MPBall
+</span><a href="#local-6989586621679095283"><span class="hs-identifier hs-var">fRightRange</span></a></span><span>
+</span><span id="line-237"></span><span>
+</span><span id="line-238"></span><span>            </span><span class="hs-comment">--FIXME: make this safe. Check if vars contain ^fSimplex[0-9]+$. If so, try ^fSimplex1[0-9]+$ or something</span><span>
+</span><span id="line-239"></span><span>            </span><span id="local-6989586621679095276"><span class="annot"><span class="annottext">fSimplexN :: String
+</span><a href="#local-6989586621679095276"><span class="hs-identifier hs-var hs-var">fSimplexN</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><span class="hs-string">&quot;fSimplex&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Integer -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">Integer
+</span><a href="#local-6989586621679095285"><span class="hs-identifier hs-var">fnInt</span></a></span><span>
+</span><span id="line-240"></span><span>          </span><span class="hs-keyword">in</span><span>
+</span><span id="line-241"></span><span>            </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><a href="#local-6989586621679095296"><span class="hs-identifier hs-var">isLeftCorner</span></a></span><span>
+</span><span id="line-242"></span><span>              </span><span class="hs-keyword">then</span><span>
+</span><span id="line-243"></span><span>                </span><span class="hs-comment">-- f is definitely above this line from the left corner</span><span>
+</span><span id="line-244"></span><span>                </span><span class="hs-comment">-- Multiplication with left corner and partial derivatives omitted, since left corner is zero</span><span>
+</span><span id="line-245"></span><span>                </span><span class="annot"><span class="annottext">[(String, Rational)] -&gt; Rational -&gt; Constraint
+</span><a href="LPPaver.Constraint.Type.html#LEQ"><span class="hs-identifier hs-var">LEQ</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095276"><span class="hs-identifier hs-var">fSimplexN</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(String, Rational) -&gt; [(String, Rational)] -&gt; [(String, Rational)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">[String] -&gt; [Rational] -&gt; [(String, Rational)]
+forall a b. [a] -&gt; [b] -&gt; [(a, b)]
+</span><span class="hs-identifier hs-var">zip</span></span><span> </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679095293"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095281"><span class="hs-identifier hs-var">fNegatedPartialDerivativesLowerBounds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-246"></span><span>                  </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095278"><span class="hs-identifier hs-var">fLeftLowerBound</span></a></span><span>
+</span><span id="line-247"></span><span>              </span><span class="hs-keyword">else</span><span>
+</span><span id="line-248"></span><span>                </span><span class="hs-comment">-- f is definitely above this line from the right corner</span><span>
+</span><span id="line-249"></span><span>                </span><span class="annot"><span class="annottext">[(String, Rational)] -&gt; Rational -&gt; Constraint
+</span><a href="LPPaver.Constraint.Type.html#LEQ"><span class="hs-identifier hs-var">LEQ</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679095276"><span class="hs-identifier hs-var">fSimplexN</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Rational
+</span><span class="hs-number">1.0</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(String, Rational) -&gt; [(String, Rational)] -&gt; [(String, Rational)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">[String] -&gt; [Rational] -&gt; [(String, Rational)]
+forall a b. [a] -&gt; [b] -&gt; [(a, b)]
+</span><span class="hs-identifier hs-var">zip</span></span><span> </span><span class="annot"><span class="annottext">[String]
+</span><a href="#local-6989586621679095293"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095279"><span class="hs-identifier hs-var">fNegatedPartialDerivativesUpperBounds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-250"></span><span>                  </span><span class="annot"><span class="annottext">(Rational -&gt; Constraint) -&gt; Rational -&gt; Constraint
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational -&gt; Rational)
+-&gt; Rational -&gt; [Rational] -&gt; Rational
+forall (t :: * -&gt; *) b a.
+Foldable t =&gt;
+(b -&gt; a -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldl</span></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; Rational
+forall t1 t2. CanAddAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; AddType t1 t2
+</span><span class="hs-identifier hs-var">add</span></span><span> </span><span class="annot"><span class="annottext">Rational
+</span><a href="#local-6989586621679095277"><span class="hs-identifier hs-var">fRightLowerBound</span></a></span><span> </span><span class="annot"><span class="annottext">([Rational] -&gt; Rational) -&gt; [Rational] -&gt; Rational
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Rational -&gt; Rational -&gt; Rational)
+-&gt; [Rational] -&gt; [Rational] -&gt; [Rational]
+forall a b c. (a -&gt; b -&gt; c) -&gt; [a] -&gt; [b] -&gt; [c]
+</span><span class="hs-identifier hs-var">zipWith</span></span><span> </span><span class="annot"><span class="annottext">Rational -&gt; Rational -&gt; Rational
+forall t1 t2. CanMulAsymmetric t1 t2 =&gt; t1 -&gt; t2 -&gt; MulType t1 t2
+</span><span class="hs-identifier hs-var">mul</span></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095292"><span class="hs-identifier hs-var">varsNewUpperBounds</span></a></span><span> </span><span class="annot"><span class="annottext">[Rational]
+</span><a href="#local-6989586621679095279"><span class="hs-identifier hs-var">fNegatedPartialDerivativesUpperBounds</span></a></span><span>
+</span><span id="line-251"></span><span>
+</span><span id="line-252"></span><span>        </span><span class="hs-special">)</span><span>
+</span><span id="line-253"></span><span>      </span><span class="hs-special">)</span><span>
+</span><span id="line-254"></span><span>      </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Integer
+</span><span class="hs-number">1</span></span><span class="hs-glyph">..</span><span class="hs-special">]</span><span>
+</span><span id="line-255"></span><span>      </span><span class="annot"><span class="annottext">[(CN MPBall, CN MPBall, Box)]
+</span><a href="#local-6989586621679095298"><span class="hs-identifier hs-var">cornerValuesWithDerivatives</span></a></span><span>
+</span><span id="line-256"></span><span>
+</span><span id="line-257"></span><span>    </span><span class="annot"><a href="#local-6989586621679095280"><span class="hs-identifier hs-type">mpBallToRational</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">CN</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">MPBall</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Rational</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Rational</span></span><span class="hs-special">)</span><span>
+</span><span id="line-258"></span><span>    </span><span id="local-6989586621679095280"><span class="annot"><span class="annottext">mpBallToRational :: CN MPBall -&gt; (Rational, Rational)
+</span><a href="#local-6989586621679095280"><span class="hs-identifier hs-var hs-var">mpBallToRational</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(MPFloat -&gt; Rational)
+-&gt; (MPFloat -&gt; Rational)
+-&gt; (MPFloat, MPFloat)
+-&gt; (Rational, Rational)
+forall (p :: * -&gt; * -&gt; *) a b c d.
+Bifunctor p =&gt;
+(a -&gt; b) -&gt; (c -&gt; d) -&gt; p a c -&gt; p b d
+</span><span class="hs-identifier hs-var">bimap</span></span><span> </span><span class="annot"><span class="annottext">MPFloat -&gt; Rational
+forall t. CanBeRational t =&gt; t -&gt; Rational
+</span><span class="hs-identifier hs-var">rational</span></span><span> </span><span class="annot"><span class="annottext">MPFloat -&gt; Rational
+forall t. CanBeRational t =&gt; t -&gt; Rational
+</span><span class="hs-identifier hs-var">rational</span></span><span> </span><span class="annot"><span class="annottext">((MPFloat, MPFloat) -&gt; (Rational, Rational))
+-&gt; (CN MPBall -&gt; (MPFloat, MPFloat))
+-&gt; CN MPBall
+-&gt; (Rational, Rational)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">MPBall -&gt; (MPFloat, MPFloat)
+forall i.
+IsInterval i =&gt;
+i -&gt; (IntervalEndpoint i, IntervalEndpoint i)
+</span><span class="hs-identifier hs-var">endpoints</span></span><span> </span><span class="annot"><span class="annottext">(MPBall -&gt; (MPFloat, MPFloat))
+-&gt; (CN MPBall -&gt; MPBall) -&gt; CN MPBall -&gt; (MPFloat, MPFloat)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">MPBall -&gt; MPBall
+</span><span class="hs-identifier hs-var">reducePrecionIfInaccurate</span></span><span> </span><span class="annot"><span class="annottext">(MPBall -&gt; MPBall) -&gt; (CN MPBall -&gt; MPBall) -&gt; CN MPBall -&gt; MPBall
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">CN MPBall -&gt; MPBall
+forall p. CN p -&gt; p
+</span><span class="hs-identifier hs-var">unCN</span></span><span>
+</span><span id="line-259"></span></pre></body></html>
