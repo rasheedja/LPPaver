@@ -1,3 +1,12 @@
+{-|
+Module      : LPPaver.Decide.Linearisation
+Description : Linearisations for conjunctions
+Copyright   : (c) Junaid Rasheed, 2021-2022
+License     : MPL
+Maintainer  : jrasheed178@gmail.com
+Stability   : experimental
+Module defining linearisations for conjunctions of 'E.ESafe' terms.
+-}
 module LPPaver.Decide.Linearisation where
 
 import MixedTypesNumPrelude
