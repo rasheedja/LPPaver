@@ -23,7 +23,18 @@ import LPPaver.Constraint.Util
 import qualified AERN2.Linear.Vector.Type as V
 import Data.Bifunctor
 
-removeConjunctionUnsatAreaWithSimplex :: [(CN MPBall, CN MPBall, Box)] -> VarMap -> (Maybe Bool, Maybe VarMap)
+-- |Remove unsat areas from a conjunction arising from a DNF by weakening the conjunction using 'createConstraintsToRemoveConjunctionUnsatArea'.
+-- The resulting linear system is solved and optimised by the two-phase simplex method.
+-- If the linear system is infeasible, the entire conjunction was unsatisfiable.
+removeConjunctionUnsatAreaWithSimplex 
+  :: [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
+                                    -- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', 
+                                    -- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', 
+                                    -- and the third item are partial derivatives of the term over a 'VarMap'.
+  -> VarMap                         -- ^ The VarMap over which we are examining the conjunction.
+  -> (Maybe Bool, Maybe VarMap)     -- ^ The result of the simplex method on the resulting linear system.
+                                    -- (Just False, Nothing) is returned if the system is infeasible.
+                                    -- (Nothing, Just newArea) is returned if the system is feasible: newArea is an optimisation of the given 'VarMap'.
 removeConjunctionUnsatAreaWithSimplex cornerValuesWithDerivatives varMap =
   case mOptimizedVars of
     Just optimizedVars -> (Nothing, Just optimizedVars)
@@ -70,7 +81,17 @@ removeConjunctionUnsatAreaWithSimplex cornerValuesWithDerivatives varMap =
           vars
         Nothing -> Nothing
 
-findConjunctionSatAreaWithSimplex :: [(CN MPBall, CN MPBall, Box)] -> VarMap -> Bool -> Maybe VarMap
+-- |Find a satisfiable point from a conjunction arising from a DNF by strengthening the conjunction using 'createConstraintsToFindSatSolution'.
+-- The resulting linear system is solved by the first phase of the two-phase simplex method.
+findConjunctionSatAreaWithSimplex 
+  :: [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
+                                    -- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', 
+                                    -- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', 
+                                    -- and the third item are partial derivatives of the term over a 'VarMap'.
+  -> VarMap                         -- ^ The VarMap over which we are examining the conjunction.
+  -> Bool                           -- ^ A boolean used to determine which 'extreme' corner to strengthen the conjunction from.
+                                    -- If true, linearise from the 'extreme' left corner and vice versa.
+  -> Maybe VarMap                   -- ^ The result. If this is Nothing, no satisfiable point was found.
 findConjunctionSatAreaWithSimplex cornerValuesWithDerivatives varMap isLeftCorner =
   case mFeasibleVars of
     Just newPoints ->
@@ -104,8 +125,14 @@ findConjunctionSatAreaWithSimplex cornerValuesWithDerivatives varMap isLeftCorne
         Just (feasibleSystem, _slackVars, _artificialVars, _objectiveVar) -> Just $ displayDictionaryResults feasibleSystem
         Nothing -> Nothing
 
-
-createConstraintsToRemoveConjunctionUnsatArea :: [(CN MPBall, CN MPBall, Box)] -> VarMap -> [Constraint]
+-- |Linearisations that weaken a conjunction of terms over some box.
+createConstraintsToRemoveConjunctionUnsatArea 
+  :: [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
+                                    -- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', 
+                                    -- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', 
+                                    -- and the third item are partial derivatives of the term over a 'VarMap'.
+  -> VarMap                         -- ^ The VarMap over which we are examining the conjunction.
+  -> [Constraint]                   -- ^ An implicit linear system that is a weakening of the conjunction.
 createConstraintsToRemoveConjunctionUnsatArea cornerValuesWithDerivatives varMap =
   domainConstraints ++ functionConstraints
   where
@@ -158,7 +185,16 @@ createConstraintsToRemoveConjunctionUnsatArea cornerValuesWithDerivatives varMap
     mpBallToRational :: CN MPBall -> (Rational, Rational)
     mpBallToRational = bimap rational rational . endpoints . reducePrecionIfInaccurate . unCN
 
-createConstraintsToFindSatSolution :: [(CN MPBall, CN MPBall, Box)] -> VarMap -> Bool -> [Constraint]
+-- |Linearisations that strengthen a conjunction of terms over some box.
+createConstraintsToFindSatSolution
+  :: [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
+                                    -- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', 
+                                    -- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', 
+                                    -- and the third item are partial derivatives of the term over a 'VarMap'.
+  -> VarMap                         -- ^ The VarMap over which we are examining the conjunction.
+  -> Bool                           -- ^ A boolean used to determine which 'extreme' corner to strengthen the conjunction from.
+                                    -- If true, linearise from the 'extreme' left corner and vice versa.
+  -> [Constraint]                   -- ^ An implicit linear system that is a weakening of the conjunction.
 createConstraintsToFindSatSolution cornerValuesWithDerivatives varMap isLeftCorner =
   domainConstraints ++ functionConstraints
   where
