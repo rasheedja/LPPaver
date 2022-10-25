@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           LPPaver
-version:        0.0.2.0
+version:        0.0.3.0
 description:    Please see the README on GitHub at <https://github.com/rasheedja/LPPaver#readme>
 homepage:       https://github.com/rasheedja/LPPaver#readme
 bug-reports:    https://github.com/rasheedja/LPPaver/issues
