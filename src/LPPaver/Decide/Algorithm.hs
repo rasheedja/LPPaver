@@ -1,3 +1,12 @@
+{-|
+Module      : LPPaver.Decide.Algorithm
+Description : Algorithms for deciding DNFs
+Copyright   : (c) Junaid Rasheed, 2021-2022
+License     : MPL
+Maintainer  : jrasheed178@gmail.com
+Stability   : experimental
+Module defining algorithms that can decide DNFs of 'E.ESafe' terms.
+-}
 module LPPaver.Decide.Algorithm where
 
 import MixedTypesNumPrelude
@@ -17,7 +26,19 @@ import AERN2.BoxFun.Box
 import LPPaver.Decide.Util
 import LPPaver.Decide.Linearisation
 
-setupBestFirstCheckDNF :: [(E.ESafe, BoxFun)] -> TypedVarMap -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
+-- |Start initial call to 'decideConjunctionBestFirst' for some conjunction in a DNF.
+setupBestFirstCheckDNF 
+  :: [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
+                          -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
+  -> TypedVarMap          -- ^ The area over which we are checking the conjunction.
+  -> Integer              -- ^ The maximum number of boxes that should be examined before giving up. 
+  -> Rational             -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
+                          -- 1.2 (the recommended default) means the simplex method will recurse if the box being examined has shrunk by 20%
+  -> Precision            -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
+  -> (Maybe Bool, Maybe TypedVarMap) -- ^ The return result.
+                                     -- (Nothing, Just indeterminateArea) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (Just False, Nothing) means that the algorithm has decided the DNF is unsatisfiable over the given area.
+                                     -- (Just True, Just satArea) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
 setupBestFirstCheckDNF expressionsWithFunctions typedVarMap bfsBoxesCutoff relativeImprovementCutoff p =
   decideConjunctionBestFirst
     -- (Q.singleton (maximum (map (\(_, f) -> (snd . endpointsAsIntervals) (apply f (typedVarMapToBox typedVarMap p))) expressionsWithFunctions)) typedVarMap)
@@ -31,8 +52,20 @@ setupBestFirstCheckDNF expressionsWithFunctions typedVarMap bfsBoxesCutoff relat
     relativeImprovementCutoff
     p
 
-checkEDNFDepthFirstWithSimplex :: [[E.ESafe]] -> TypedVarMap -> Integer -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
-checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff bfsBoxesCutoff relativeImprovementCutoff p =
+-- |Check a DNF of 'E.ESafe' terms using a depth-first branch-and-prune algorithm which tends to perform well when the problem is unsatisfiable.
+checkEDNFDepthFirstWithSimplex 
+  :: [[E.ESafe]]  -- ^ Each item is a term in the conjunction.
+                  -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
+  -> TypedVarMap  -- ^ The area over which we are checking the conjunction.
+  -> Integer      -- ^ The maximum depth that we can reach before giving up. 
+  -> Rational     -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
+                  -- 1.2 (the recommended default) means the simplex method will recurse if the box being examined has shrunk by 20%
+  -> Precision    -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
+  -> (Maybe Bool, Maybe TypedVarMap) -- ^ The return result.
+                                     -- (Nothing, Just indeterminateArea) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (Just False, Nothing) means that the algorithm has decided the DNF is unsatisfiable over the given area.
+                                     -- (Just True, Just satArea) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
+checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImprovementCutoff p =
   checkDisjunctionResults conjunctionResults Nothing
   where
     conjunctionResults =
@@ -47,10 +80,22 @@ checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff bfsBoxesCuto
             typedVarMap
           filteredVarMap = typedVarMapToVarMap filteredTypedVarMap
         in
-          decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap filteredTypedVarMap 0 depthCutoff bfsBoxesCutoff relativeImprovementCutoff p)
+          decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap filteredTypedVarMap 0 depthCutoff relativeImprovementCutoff p)
       conjunctions
 
-checkEDNFBestFirstWithSimplexCE :: [[E.ESafe]] -> TypedVarMap -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
+-- |Check a DNF of 'E.ESafe' terms using a best-first branch-and-prune algorithm which tends to perform well when the problem is satisfiable.
+checkEDNFBestFirstWithSimplexCE 
+  :: [[E.ESafe]]  -- ^ Each item is a term in the conjunction.
+                  -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
+  -> TypedVarMap  -- ^ The area over which we are checking the conjunction.
+  -> Integer      -- ^ The maximum number of boxes that should be examined before giving up. 
+  -> Rational     -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
+                  -- 1.2 (the recommended default) means the simplex method will recurse if the box being examined has shrunk by 20%
+  -> Precision    -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
+  -> (Maybe Bool, Maybe TypedVarMap) -- ^ The return result.
+                                     -- (Nothing, Just indeterminateArea) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (Just False, Nothing) means that the algorithm has decided the DNF is unsatisfiable over the given area.
+                                     -- (Just True, Just satArea) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
 checkEDNFBestFirstWithSimplexCE conjunctions typedVarMap bfsBoxesCutoff relativeImprovementCutoff p =
   checkDisjunctionResults conjunctionResults Nothing
   where
@@ -70,7 +115,12 @@ checkEDNFBestFirstWithSimplexCE conjunctions typedVarMap bfsBoxesCutoff relative
       )
       conjunctions
 
-decideConjunctionWithApply :: [(E.ESafe, BoxFun)] -> Box -> Maybe Bool
+-- |Attempt to decide a conjunction over some given box using basic interval evaluation via 'apply' 
+decideConjunctionWithApply 
+  :: [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
+                          -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
+  -> Box                  -- The box over which the conjunction is being examined.
+  -> Maybe Bool           -- The result. 'Nothing' is given if a decision could not be made. 
 decideConjunctionWithApply expressionsWithFunctions box
   | null filterOutTrueTerms  = Just True
   | checkIfEsFalseUsingApply = Just False
@@ -81,7 +131,21 @@ decideConjunctionWithApply expressionsWithFunctions box
     filterOutTrueTerms       = filterOutTrueExpressions esWithRanges
     checkIfEsFalseUsingApply = decideConjunctionRangesFalse filterOutTrueTerms
 
-decideConjunctionBestFirst :: Q.MaxPQueue (CN MPBall) ([(E.ESafe, BoxFun)], TypedVarMap, Bool)-> Integer -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
+-- |Decide a conjunction in a best-first manner using a priority queue. Maximal minimums over conjunctions are used to order them, with larger maximal minimums taking priority.
+decideConjunctionBestFirst 
+  :: Q.MaxPQueue (CN MPBall) ([(E.ESafe, BoxFun)], TypedVarMap, Bool) -- ^The priority queue. Maximal minimals are represented using CN MPBall.
+                                                                      -- Each element in the queue is a triple.
+                                                                      -- The first item is a pair where 'fst' is an 'E.ESafe' representation of the term and the 'snd' is a 'BoxFun' equivalent of the same term.
+                                                                      -- The second item is the area over which the previous conjunction should be examined.
+                                                                      -- The third item is a boolean used to determine from which 'extreme' corner to linearise the conjunction.
+  -> Integer      -- ^ The number of boxes that have been examined.
+  -> Integer      -- ^ The maximum number of boxes that should be examined before giving up. 
+  -> Rational     -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
+  -> Precision    -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
+  -> (Maybe Bool, Maybe TypedVarMap) -- ^ The return result.
+                                     -- (Nothing, Just indeterminateArea) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (Just False, Nothing) means that the algorithm has decided the DNF is unsatisfiable over the given area.
+                                     -- (Just True, Just satArea) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
 decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relativeImprovementCutoff p =
   case Q.maxView queue of
     Just ((expressionsWithFunctions, typedVarMap, isLeftCorner), queueWithoutVarMap) ->
@@ -90,7 +154,7 @@ decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relat
         case decideConjunctionWithSimplexCE expressionsWithFunctions typedVarMap typedVarMap relativeImprovementCutoff p isLeftCorner of
           (Just False, _, _, _) -> decideConjunctionBestFirst queueWithoutVarMap (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p
           (Just True, Just satArea, _, _) -> (Just True, Just satArea)
-          (Nothing, Just indeterminateVarMap, Just filteredExpressionsWithFunctions, Just newIsLeftCorner) -> trace "h" $
+          (Nothing, Just indeterminateVarMap, filteredExpressionsWithFunctions, newIsLeftCorner) -> trace "h" $
             let
               functions = map snd filteredExpressionsWithFunctions
 
@@ -116,8 +180,23 @@ decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relat
       else (Nothing, Just typedVarMap)   -- Reached number of boxes cutoff
     Nothing -> (Just False, Nothing) -- All areas in queue disproved
 
-decideConjunctionDepthFirstWithSimplex :: [(E.ESafe, BoxFun)] -> TypedVarMap -> TypedVarMap -> Integer -> Integer -> Integer -> Rational -> Precision -> (Maybe Bool, Maybe TypedVarMap)
-decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap typedVarMap currentDepth depthCutoff bfsBoxesCutoff relativeImprovementCutoff p
+-- |Decide a conjunction arising from a DNF over a given box using a depth-first branch-and-prune algorithm which tends to work well when the problem is unsatisfiable.
+decideConjunctionDepthFirstWithSimplex
+  :: [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
+                          -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
+  -> TypedVarMap          -- ^ The initial area over which the box is being examined. This remains unchanged during recursive calls to this function.
+  -> TypedVarMap          -- ^ The current area over which the box is being examined.
+  -> Integer              -- ^ The current depth.
+  -> Integer              -- ^ The maximum allowed depth before giving up
+  -> Rational             -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
+                          -- 1.2 (the recommended default) means the simplex method will recurse if the box being examined has shrunk by 20%
+  -> Precision            -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
+  -> (Maybe Bool, Maybe TypedVarMap) -- ^ The return result.
+                                     -- (Nothing, Just indeterminateArea) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (Just False, Nothing) means that the algorithm has decided the DNF is unsatisfiable over the given area.
+                                     -- (Just True, Just satArea) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
+
+decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap typedVarMap currentDepth depthCutoff relativeImprovementCutoff p
   | null filterOutTrueTerms =
     trace ("proved sat with apply " ++ show roundedVarMap)
     (Just True, Just roundedVarMap)
@@ -154,8 +233,8 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
             withStrategy
             (parTuple2 rseq rseq)
             (
-              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap leftVarMap (currentDepth + 1) depthCutoff bfsBoxesCutoff relativeImprovementCutoff p,
-              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap rightVarMap (currentDepth + 1) depthCutoff bfsBoxesCutoff relativeImprovementCutoff p
+              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap leftVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p,
+              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap rightVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p
             )
         in
           case leftR of
@@ -192,17 +271,31 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
             Nothing    -> (Nothing, Just recurseVarMap)
         | typedMaxWidth roundedVarMap / typedMaxWidth recurseVarMap >= relativeImprovementCutoff =
           trace ("recursing with simplex with roundedVarMap: " ++ show recurseVarMap) $
-          decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap recurseVarMap currentDepth depthCutoff bfsBoxesCutoff relativeImprovementCutoff p
+          decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap recurseVarMap currentDepth depthCutoff relativeImprovementCutoff p
         | otherwise = bisectUntilCutoff recurseVarMap
 
-decideConjunctionWithSimplexCE :: [(E.ESafe, BoxFun)] -> TypedVarMap -> TypedVarMap -> Rational -> Precision -> Bool -> (Maybe Bool, Maybe TypedVarMap, Maybe [(E.ESafe, BoxFun)], Maybe Bool)
+-- |Decide a conjunction arising from a DNF over a given box using a best-first branch-and-prune algorithm which tends to work well when the problem is satisfiable.
+decideConjunctionWithSimplexCE
+  :: [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
+                          -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
+  -> TypedVarMap          -- ^ The initial area over which the box is being examined. This remains unchanged during recursive calls to this function.
+  -> TypedVarMap          -- ^ The current area over which the box is being examined.
+  -> Rational             -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
+                          -- 1.2 (the recommended default) means the simplex method will recurse if the box being examined has shrunk by 20%
+  -> Precision            -- ^ 'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
+  -> Bool                 -- ^ A boolean used to determine the 'extreme' corner to linearise the conjunction from.
+  -> (Maybe Bool, Maybe TypedVarMap, [(E.ESafe, BoxFun)], Bool) -- ^The return result
+                                                                -- For the first item, Nothing means the algorithm could not decide, Just False means unsatisfiable and Just True means satisfiable.
+                                                                -- The second item gives a counter-example/indeterminate area if appropriate.
+                                                                -- The third item is a filtered conjunction: terms which interval evaluate to true are filtered out.
+                                                                -- A boolean specifying the last corner from which the conjunction was linearised.
 decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMap relativeImprovementCutoff p isLeftCorner
   | null filterOutTrueTerms =
     trace ("proved sat with apply " ++ show roundedVarMap)
-    (Just True, Just roundedVarMap, Just filteredExpressionsWithFunctions, Just isLeftCorner)
+    (Just True, Just roundedVarMap, filteredExpressionsWithFunctions, isLeftCorner)
   | checkIfEsFalseUsingApply =
     trace "proved unsat with apply"
-    (Just False, Nothing, Just filteredExpressionsWithFunctions, Just isLeftCorner)
+    (Just False, Nothing, filteredExpressionsWithFunctions, isLeftCorner)
   | otherwise = checkSimplex
   where
       box  = typedVarMapToBox typedVarMap p
@@ -229,10 +322,10 @@ decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMa
         | (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
           trace "decideWithSimplex start" $
           case removeConjunctionUnsatAreaWithSimplex filteredCornerRangesWithDerivatives untypedRoundedVarMap of
-            (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) (Just False, Nothing, Just filteredExpressionsWithFunctions, Just isLeftCorner)
+            (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) (Just False, Nothing, filteredExpressionsWithFunctions, isLeftCorner)
             (Nothing, Just newVarMap) -> trace "decideWithSimplex indet" $
               case safeVarMapToTypedVarMap newVarMap varNamesWithTypes of
-                Nothing -> (Just False, Nothing, Just filteredExpressionsWithFunctions, Just isLeftCorner) -- This will only happen when all integers in an integer-only varMap have been decided
+                Nothing -> (Just False, Nothing, filteredExpressionsWithFunctions, isLeftCorner) -- This will only happen when all integers in an integer-only varMap have been decided
                 Just nvm ->
                   let
                     newTypedVarMap = unsafeIntersectVarMap nvm roundedVarMap
@@ -250,7 +343,7 @@ decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMa
                             case safeVarMapToTypedVarMap satSolution varNamesWithTypes of
                               Just typedSatSolution ->
                                 if decideConjunctionTrue (map fst filterOutTrueTerms) typedSatSolution p
-                                  then (Just True, Just typedSatSolution, Just filteredExpressionsWithFunctions, Just isLeftCorner)
+                                  then (Just True, Just typedSatSolution, filteredExpressionsWithFunctions, isLeftCorner)
                                   else recurseOnVarMap newTypedVarMap
                               Nothing -> error $ "Found sat solution but encountered error when converting to typed sat solution" ++ show satSolution
                           Nothing -> recurseOnVarMap newTypedVarMap
@@ -261,10 +354,10 @@ decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMa
       recurseOnVarMap recurseVarMap
         | typedMaxWidth recurseVarMap == 0 =
           case decideConjunctionWithApply filteredExpressionsWithFunctions (typedVarMapToBox recurseVarMap p) of
-            Just True  -> (Just True, Just recurseVarMap, Just filteredExpressionsWithFunctions, Just isLeftCorner)
-            Just False -> (Just False, Nothing, Just filteredExpressionsWithFunctions, Just isLeftCorner)
-            Nothing    -> (Nothing, Just recurseVarMap, Just filteredExpressionsWithFunctions, Just isLeftCorner)
+            Just True  -> (Just True, Just recurseVarMap, filteredExpressionsWithFunctions, isLeftCorner)
+            Just False -> (Just False, Nothing, filteredExpressionsWithFunctions, isLeftCorner)
+            Nothing    -> (Nothing, Just recurseVarMap, filteredExpressionsWithFunctions, isLeftCorner)
         | typedMaxWidth roundedVarMap / typedMaxWidth recurseVarMap >= relativeImprovementCutoff =
           trace ("recursing with simplex with roundedVarMap: " ++ show recurseVarMap) $
           decideConjunctionWithSimplexCE filteredExpressionsWithFunctions initialVarMap recurseVarMap relativeImprovementCutoff p (not isLeftCorner)
-        | otherwise = (Nothing, Just recurseVarMap, Just filteredExpressionsWithFunctions, Just isLeftCorner)
+        | otherwise = (Nothing, Just recurseVarMap, filteredExpressionsWithFunctions, isLeftCorner)

@@ -89,7 +89,7 @@ checkVCsUnsat (file : files) fileParent = do
           let 
             ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
           in do
-            case checkEDNFDepthFirstWithSimplex  ednf typedVarMap 100 0 1.2 (prec 100) of
+            case checkEDNFDepthFirstWithSimplex  ednf typedVarMap 100 1.2 (prec 100) of
               (Just False, _) -> do
                 putStrLn $ "Proved unsat: " ++ file
                 checkVCsUnsat files fileParent

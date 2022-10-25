@@ -127,7 +127,7 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
   let result =
         if ceMode
           then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec p)
-          else checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff 0         1.2 (prec p)
+          else checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff           1.2 (prec p)
   case result of
     (Just True, Just model) -> do
       putStrLn "sat"
