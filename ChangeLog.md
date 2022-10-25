@@ -2,7 +2,7 @@
 
 ## Unreleased changes
 
-- Clean up and document LPPaver.Decide.Util
+- Clean up and document new modules
 - Split up single Type.hs module into smaller and better encapsulated modules
 - Add constraintRightSide to LPPaver.Constraint.Util
 - Document LPPaver.Constraint.Type and LPPaver.Constraint.Util
