@@ -1,5 +1,5 @@
 name:                LPPaver
-version:             0.0.3.0
+version:             0.0.3.1
 github:              "rasheedja/LPPaver"
 license:             MPL-2.0
 author:              "Junaid Rasheed"
@@ -11,8 +11,8 @@ extra-source-files:
 - ChangeLog.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            An automated prover targeting problems that involve nonlinear real arithmetic
+category:            Math, Maths, Mathematics, Formal methods, Theorem Provers, verification
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
