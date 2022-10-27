@@ -2,7 +2,7 @@
 
 Everything officially understood by LPPaver is shown below.
 Anything enclosed with {} are things that you should replace as appropriate.
-LPPaver uses [PropaFP](https://github.com/rasheedja/PropaFP/) to parse files, simplify them, and safely eliminate floating-point operations.
+LPPaver uses [PropaFP](https://github.com/rasheedja/PropaFP/) to parse and simplify files.
 
 ```lisp
 
@@ -49,17 +49,5 @@ n ; Any number is treated as a Real number.
 (to_int_rtn {n}) ; round n to the nearest integer, with ties rounding towards negative infinity
 (to_int_rtz {n}) ; round n to the nearest integer, with ties rounding towards zero
 (to_int_rna {n}) ; round n to the nearest integer, with ties rounding away from zero
-
-(float32_rne {n}) ; round n to the nearest float, with ties rounding to the nearest even number
-(float32_rtp {n}) ; round n to the nearest float, with ties rounding towards positive infinity
-(float32_rtn {n}) ; round n to the nearest float, with ties rounding towards negative infinity
-(float32_rtz {n}) ; round n to the nearest float, with ties rounding towards zero
-(float32_rna {n}) ; round n to the nearest float, with ties rounding away from zero
-
-(float64_rne {n}) ; round n to the nearest float, with ties rounding to the nearest even number
-(float64_rtp {n}) ; round n to the nearest float, with ties rounding towards positive infinity
-(float64_rtn {n}) ; round n to the nearest float, with ties rounding towards negative infinity
-(float64_rtz {n}) ; round n to the nearest float, with ties rounding towards zero
-(float64_rna {n}) ; round n to the nearest float, with ties rounding away from zero
 
 ```
