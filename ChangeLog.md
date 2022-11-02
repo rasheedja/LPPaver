@@ -1,5 +1,9 @@
 # Changelog for LPPaver
 
+## Unreleased Changes
+
+- Polish documentation
+
 ## [v0.0.3.1](https://github.com/rasheedja/PropaFP/compare/v0.0.3.1...v0.0.3.1)
 
 - Write initial README.md and REFERENCE.md

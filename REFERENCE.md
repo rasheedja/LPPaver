@@ -1,12 +1,12 @@
 # Reference
 
-Everything officially understood by LPPaver is shown below.
-Anything enclosed with {} are things that you should replace as appropriate.
+LPPaver supports custom input files using the operations defined below.
+Anything enclosed with {} are things that should be replaced as appropriate.
 LPPaver uses [PropaFP](https://github.com/rasheedja/PropaFP/) to parse and simplify files.
 
 ```lisp
 
-(declare-fun varName () varType) ; Used to declare variables
+(declare-fun varName () {varType}) ; Used to declare variables
                                  ; varType must be Real or Integer
                                  ; custom function declarations (i.e., declare-fun with some input types) is not currently supported
 (assert {booleanValue})
