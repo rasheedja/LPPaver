@@ -11,6 +11,9 @@ import PropaFP.Parsers.DRealSmt
 import Options.Applicative
 import System.Directory
 import Data.Ratio
+import LPPaver.Decide.Util
+import LPPaver.Decide.Type
+import Control.Monad
 
 data ProverOptions = ProverOptions
   {
@@ -77,9 +80,10 @@ proverOptions = ProverOptions
       <> help "SMT2 file to be checked"
       <> metavar "filePath"
     )
+
 main :: IO ()
-main = 
-  do 
+main =
+  do
     runProver =<< execParser opts
     where
       opts = info (proverOptions <**> helper)
@@ -89,13 +93,13 @@ main =
 
 runProver :: ProverOptions -> IO ()
 runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath) =
-  do 
+  do
     if provingProcessDone
       then do
         parsedFile <- parseSMT2 filePath
         case parseDRealSmtToF parsedFile of
           (Just vc, typedVarMap) ->
-            let 
+            let
               -- If there are variable free comparisons here, we could not deal with them earlier in the proving process.
               -- LPPaver cannot perform any better with these so we safely remove them.
               ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
@@ -112,7 +116,7 @@ runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bes
             mParsedVC <- parseVCToF filePath fptaylorPath
             case mParsedVC of
               Just (vc, typedVarMap) ->
-                let 
+                let
                   -- If there are variable free comparisons here, we could not deal with them earlier in the proving process.
                   -- LPPaver cannot perform any better with these so we safely remove them.
                   ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
@@ -129,24 +133,22 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
           then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec p)
           else checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff           1.2 (prec p)
   case result of
-    (Just True, Just model) -> do
+    SatDNF model _ -> do
       putStrLn "sat"
       printSMTModel model
       prettyPrintCounterExample model
-    (Just False, _) -> do
+    UnsatDNF _ -> do
       putStrLn "unsat"
-    r@(_, Just indeterminateExample) -> do
+    IndeterminateDNF indeterminateExample _ -> do
       putStrLn "unknown"
       printSMTModel indeterminateExample
       prettyPrintCounterExample indeterminateExample
-    r@(_, _) -> do
-      putStrLn "unknown"
 
 prettyPrintCounterExample :: TypedVarMap -> IO ()
 prettyPrintCounterExample [] = return ()
-prettyPrintCounterExample ((TypedVar (v, (l, r)) t) : vs) = 
+prettyPrintCounterExample ((TypedVar (v, (l, r)) t) : vs) =
   if l == r
-    then do 
+    then do
       putStrLn (v ++ " = " ++ show (double l))
       prettyPrintCounterExample vs
     else do
