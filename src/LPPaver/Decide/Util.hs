@@ -27,6 +27,7 @@ import AERN2.Kleenean
 import PropaFP.Translators.BoxFun
 import AERN2.BoxFun.Optimisation
 import Control.Parallel.Strategies
+import LPPaver.Decide.Type
 
 -- TODO: Remove traces
 -- |Dummy trace function
@@ -360,17 +361,15 @@ decideConjunctionTrue c v p =
   )
   c
 
--- |Check the results of a disjunction in a standard manner
-checkDisjunctionResults :: [(Maybe Bool, Maybe potentialModel)] -> Maybe potentialModel -> (Maybe Bool, Maybe potentialModel)
-checkDisjunctionResults [] Nothing = (Just False, Nothing)
-checkDisjunctionResults [] indeterminateArea@(Just _) = (Nothing, indeterminateArea)
-checkDisjunctionResults (result : results) mIndeterminateArea =
+-- |Check the results of a disjunction of 'DNFConjunctionResult's in a standard manner
+checkDisjunctionResults :: [DNFConjunctionResult box] -> Maybe (DNFConjunctionResult box) -> [[BoxStep box]] -> DNFResult box
+checkDisjunctionResults [] (Just (IndetBox indeterminateArea indeterminatePavings)) _ = IndeterminateDNF indeterminateArea indeterminatePavings
+checkDisjunctionResults [] _ unsatPavings                                                     = UnsatDNF unsatPavings
+checkDisjunctionResults (result : results) mIndeterminateArea unsatPavings =
   case result of
-    r@(Just True, _) -> r
-    (Just False, _) ->
-      checkDisjunctionResults results mIndeterminateArea
-    (Nothing, indeterminateArea@(Just _)) -> checkDisjunctionResults results indeterminateArea
-    (Nothing, Nothing) -> undefined
+    r@(SatBox potentialModel pavings) -> SatDNF potentialModel pavings
+    (UnsatBox pavings) -> checkDisjunctionResults results mIndeterminateArea (unsatPavings ++ [pavings])
+    r@(IndetBox _ _) -> checkDisjunctionResults results (Just r) unsatPavings
 
 -- |Check the results of a conjunction in a standard manner
 checkConjunctionResults :: [(Maybe Bool, Maybe potentialModel)] -> Maybe potentialModel -> (Maybe Bool, Maybe potentialModel)

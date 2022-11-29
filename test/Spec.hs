@@ -11,6 +11,8 @@ import PropaFP.Translators.MetiTarski
 import System.Exit
 import MixedTypesNumPrelude (ifThenElse)
 import LPPaver.Decide.Algorithm
+import LPPaver.Decide.Util
+import LPPaver.Decide.Type
 import PropaFP.Eliminator (minMaxAbsEliminatorF)
 import PropaFP.Parsers.DRealSmt
 import AERN2.MP
@@ -63,13 +65,13 @@ checkVCsSat (file : files) fileParent = do
             ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
           in do
             case checkEDNFBestFirstWithSimplexCE ednf typedVarMap 1000 1.2 (prec 100) of
-              (Just True, _) -> do
+              SatDNF _ _ -> do
                 putStrLn $ "Proved sat: " ++ file
                 checkVCsSat files fileParent
-              (Just False, _) -> do
+              UnsatDNF _ -> do
                 putStrLn $ "Satisfiable VC found to be unsatisfiable: " ++ file
                 exitFailure
-              (Nothing, _) -> do
+              IndeterminateDNF _ _ -> do
                 putStrLn  $ "Satisfiable VC could not be decided: " ++ file
                 exitFailure
         Nothing -> do
@@ -90,13 +92,13 @@ checkVCsUnsat (file : files) fileParent = do
             ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
           in do
             case checkEDNFDepthFirstWithSimplex  ednf typedVarMap 100 1.2 (prec 100) of
-              (Just False, _) -> do
+              UnsatDNF _ -> do
                 putStrLn $ "Proved unsat: " ++ file
                 checkVCsUnsat files fileParent
-              (Just True, _) -> do
+              SatDNF _ _ -> do
                 putStrLn $ "Unsatisfiable VC found to be satisfiable: " ++ file
                 exitFailure
-              (Nothing, _) -> do
+              IndeterminateDNF _ _ -> do
                 putStrLn  $ "Unsatisfiable VC could not be decided: " ++ file
                 exitFailure
         Nothing -> do
