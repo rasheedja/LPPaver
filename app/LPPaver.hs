@@ -10,6 +10,7 @@ import PropaFP.Parsers.Smt (parseSMT2, parseVCToF, ParsingMode (Why3, CNF))
 import PropaFP.Parsers.DRealSmt
 import Options.Applicative
 import System.Directory
+import System.FilePath
 import Data.Ratio
 import LPPaver.Decide.Util
 import LPPaver.Decide.Type
@@ -23,14 +24,9 @@ data ProverOptions = ProverOptions
     bestFirstSearchCutoff :: Integer,
     precision :: Integer,
     -- relativeImprovementCutoff :: Rational, make this a flag, as a double is probably easier
-    fileName :: String
+    fileName :: String,
+    outputPavings :: Bool
   }
-
--- data DRealOptions = DRealOptions
---   {
---     dRealFileName :: String,
---     dRealTargetName :: String
---   }
 
 proverOptions :: Parser ProverOptions
 proverOptions = ProverOptions
@@ -80,6 +76,12 @@ proverOptions = ProverOptions
       <> help "SMT2 file to be checked"
       <> metavar "filePath"
     )
+  <*> switch
+    (
+      long "output-pavings"
+      <> short 'o'
+      <> help "When this flag is passed, LPPaver will produce JSON output of paved boxes."
+    )
 
 main :: IO ()
 main =
@@ -92,7 +94,7 @@ main =
         <> header "LPPaver - prover" )
 
 runProver :: ProverOptions -> IO ()
-runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath) =
+runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath outputPavings) =
   do
     if provingProcessDone
       then do
@@ -127,22 +129,110 @@ runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bes
                 putStrLn "Issue parsing file"
 
 decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO ()
-decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath) = do
+decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath outputPavings) = do
   let result =
         if ceMode
           then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec p)
           else checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff           1.2 (prec p)
+  let vcFileWithoutExtension = takeFileName . dropExtensions $ filePath
   case result of
-    SatDNF model _ -> do
+    SatDNF model pavings -> do
       putStrLn "sat"
       printSMTModel model
       prettyPrintCounterExample model
-    UnsatDNF _ -> do
+      when outputPavings $ do
+        let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
+        writeJSONFile vcFileWithoutExtension jsonOutput
+    UnsatDNF listOfPavings -> do
       putStrLn "unsat"
-    IndeterminateDNF indeterminateExample _ -> do
+      when outputPavings $ do
+        let jsonOutput = listOfTypedVarMapPavingsToJSON listOfPavings 0
+        writeJSONFile vcFileWithoutExtension jsonOutput
+    IndeterminateDNF indeterminateExample pavings -> do
       putStrLn "unknown"
       printSMTModel indeterminateExample
       prettyPrintCounterExample indeterminateExample
+      when outputPavings $ do
+        let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
+        writeJSONFile vcFileWithoutExtension jsonOutput
+  where
+    -- Useful functions for converting our pavings into a JSON object
+
+    rationalToJSON :: Rational -> String
+    rationalToJSON r = "[" ++ show n ++ "," ++ show d ++ "]"
+      where
+        n = numerator r
+        d = denominator r
+
+    listOfTypedVarMapPavingsToJSON :: [BoxPavings TypedVarMap] -> Integer -> String
+    listOfTypedVarMapPavingsToJSON listOfPavings tabCount =
+      replicate tabCount '\t' ++ "[" ++ "\n" ++
+      aux listOfPavings ++ "\n" ++
+      replicate tabCount '\t' ++ "]"
+      where
+        aux [] = ""
+        aux [ps] = typedVarMapBoxPavingsToJSON ps 1
+        aux (ps : pss) = aux [ps] ++ ",\n" ++ aux pss
+
+    typedVarMapBoxPavingsToJSON :: BoxPavings TypedVarMap -> Integer -> String
+    typedVarMapBoxPavingsToJSON pavings tabCount =
+      replicate tabCount '\t' ++ "[" ++ "\n" ++
+      aux pavings ++ "\n" ++
+      replicate tabCount '\t' ++ "]"
+      where
+        tabCount' = tabCount + 1
+
+        aux [] = ""
+        aux [p] = typedVarMapBoxPavingToJSON p tabCount'
+        aux (p : ps) = aux [p] ++ replicate tabCount' '\t' ++ ",\n" ++ aux ps
+
+    typedVarMapBoxPavingToJSON :: BoxPaving TypedVarMap -> Integer -> String
+    typedVarMapBoxPavingToJSON (BoxPaving tvm pR pT) tabCount =
+      replicate tabCount '\t' ++ "{\n" ++
+      replicate tabCount' '\t' ++ "\"box\":\n" ++
+      replicate tabCount'' '\t' ++ "[\n" ++
+      aux tvm ++
+      replicate tabCount'' '\t' ++ "],\n" ++
+      replicate tabCount' '\t' ++ "\"boxEvalResult\": \"" ++ show pR ++ "\",\n" ++
+      replicate tabCount' '\t' ++ "\"boxReachedBy\": \"" ++ show pT ++ "\"\n" ++
+      replicate tabCount '\t' ++ "}\n"
+      where
+        tabCount' = tabCount + 1
+        tabCount'' = tabCount' + 1
+        tabCount''' = tabCount'' + 1
+        tabCount'''' = tabCount''' + 1
+
+        aux [] = ""
+        aux [TypedVar (v, (l, r)) t] =
+          replicate tabCount''' '\t' ++ "{\n" ++
+          replicate tabCount'''' '\t' ++ "\"variableName\" : " ++ show v ++ ",\n" ++
+          replicate tabCount'''' '\t' ++ "\"variableType\" : " ++ "\"" ++ show t ++ "\"" ++ ",\n" ++
+          replicate tabCount'''' '\t' ++ "\"leftEndpoint\" : " ++ rationalToJSON l ++ ",\n" ++
+          replicate tabCount'''' '\t' ++ "\"rightEndpoint\" : " ++ rationalToJSON r ++ "\n" ++
+          replicate tabCount''' '\t' ++ "}\n"
+        aux (v : vs) = aux [v] ++ replicate tabCount''' '\t' ++ "," ++ "\n" ++ aux vs
+
+    writeJSONFile :: String -> String -> IO ()
+    writeJSONFile fileNameWithoutExtension jsonString = do
+      putStr "Saving pavings information to "
+      safeFile >>= putStrLn
+      safeFile >>= (`writeFile` jsonString)
+      putStrLn "Pavings information saved"
+      where
+        safeFile = do
+          let jsonFileName = fileNameWithoutExtension ++ ".json"
+          doesJSONFileNameExist <- doesFileExist jsonFileName
+          if doesJSONFileNameExist
+            then findSafeFile fileNameWithoutExtension 0
+            else return jsonFileName
+
+        -- |Chooses an empty/non-existant file to write to
+        findSafeFile f appendCounter = do
+          let currentF = f ++ show appendCounter ++ ".json"
+          doesCurrentFExist <- doesFileExist currentF
+          if doesCurrentFExist
+            then findSafeFile f (appendCounter + 1)
+            else return currentF
 
 prettyPrintCounterExample :: TypedVarMap -> IO ()
 prettyPrintCounterExample [] = return ()
