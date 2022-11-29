@@ -31,6 +31,7 @@ library
       LPPaver.Constraint.Util
       LPPaver.Decide.Algorithm
       LPPaver.Decide.Linearisation
+      LPPaver.Decide.Type
       LPPaver.Decide.Util
   other-modules:
       Paths_LPPaver
