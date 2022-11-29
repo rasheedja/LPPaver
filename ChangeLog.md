@@ -3,14 +3,16 @@
 ## Unreleased Changes
 
 - Polish documentation
+- Add useful types for our decision algorithms
 
-## [v0.0.3.1](https://github.com/rasheedja/PropaFP/compare/v0.0.3.1...v0.0.3.1)
+
+## [v0.0.3.1](https://github.com/rasheedja/LPPaver/compare/v0.0.3.1...v0.0.3.1)
 
 - Write initial README.md and REFERENCE.md
 - Remove haddock documentation using GitHub pages
   - Issues with dependencies so using hackage instead
 
-## [v0.0.3.0](https://github.com/rasheedja/PropaFP/compare/v0.0.3.0...v0.0.2.0)
+## [v0.0.3.0](https://github.com/rasheedja/LPPaver/compare/v0.0.3.0...v0.0.2.0)
 
 - Deploy haddock documentation using GitHub pages
 - Clean up and document new modules
@@ -18,7 +20,7 @@
 - Add constraintRightSide to LPPaver.Constraint.Util
 - Document LPPaver.Constraint.Type and LPPaver.Constraint.Util
 
-## [v0.0.2.0](https://github.com/rasheedja/PropaFP/compare/v0.0.2.0...v0.0.1)
+## [v0.0.2.0](https://github.com/rasheedja/LPPaver/compare/v0.0.2.0...v0.0.1)
 
 - Replace minView with maxView in 'model search' mode
   - Higher ranges are more likely to produce models
