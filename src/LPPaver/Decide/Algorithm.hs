@@ -48,15 +48,13 @@ setupBestFirstCheckDNF expressionsWithFunctions typedVarMap bfsBoxesCutoff relat
     (Q.singleton
       -- Maximum minimum 
       (fromMaybe (cn (mpBallP p 1000000000000)) (safeMaximumMinimum (map snd expressionsWithFunctions) (typedVarMapToBox typedVarMap p) Nothing))
-      (expressionsWithFunctions, typedVarMap, True, initialPaving))
+      (expressionsWithFunctions, typedVarMap, True, [BoxPaving typedVarMap NoEval Start]))
     -- (Q.singleton (maximum (map (\(_, f) -> AERN2.MP.Ball.centre (apply f (typedVarMapToBox typedVarMap p))) expressionsWithFunctions)) typedVarMap)
     0
     bfsBoxesCutoff
     relativeImprovementCutoff
     p
-    initialPaving
-  where
-    initialPaving = [BoxPaving typedVarMap NoEval Start]
+    []
 
 -- |Check a DNF of 'E.ESafe' terms using a depth-first branch-and-prune algorithm which tends to perform well when the problem is unsatisfiable.
 checkEDNFDepthFirstWithSimplex 
@@ -159,37 +157,35 @@ decideConjunctionBestFirst
                                      -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
 decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relativeImprovementCutoff p currentPavings =
   case Q.maxView queue of
-    Just ((expressionsWithFunctions, typedVarMap, isLeftCorner, expressionBoxPavings), queueWithoutVarMap) ->
+    Just ((expressionsWithFunctions, typedVarMap, isLeftCorner, expressionBoxPavings), queueWithoutFront) ->
       if numberOfBoxesExamined !<! numberOfBoxesCutoff then
         trace (show numberOfBoxesExamined) $
         case decideConjunctionWithSimplexCE expressionsWithFunctions typedVarMap typedVarMap relativeImprovementCutoff p isLeftCorner expressionBoxPavings of
-          (UnsatBox pavedBoxes, QueueInfo {}) -> decideConjunctionBestFirst queueWithoutVarMap (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p (currentPavings ++ pavedBoxes)
-          (SatBox satArea pavedBoxes, QueueInfo {}) -> SatBox satArea pavedBoxes
+          (UnsatBox pavedBoxes, QueueInfo {}) -> decideConjunctionBestFirst queueWithoutFront (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p (currentPavings ++ pavedBoxes)
+          (SatBox satArea pavedBoxes, QueueInfo {}) -> SatBox satArea (currentPavings ++ pavedBoxes)
           (IndeterminateBox indeterminateVarMap pavedBoxes, QueueInfo filteredExpressionsWithFunctions newIsLeftCorner wasPruned) ->
             let
               functions = map snd filteredExpressionsWithFunctions
-              newPavings = currentPavings ++ pavedBoxes
               (leftVarMap, rightVarMap) = trace "bisecting" bisectWidestTypedInterval indeterminateVarMap
 
               createBoxPaving tvm = BoxPaving tvm (if wasPruned then IndetLin else IndetEval) Split
 
-
               leftVarMapWithExpressionsAndCornerAndMinimum  = trace (show (map fst filteredExpressionsWithFunctions)) $ trace "left"
                 (
                   fromMaybe (cn (mpBallP p 1000000000000)) (safeMaximumMinimum functions (typedVarMapToBox leftVarMap p) Nothing),
-                  (filteredExpressionsWithFunctions, leftVarMap, not newIsLeftCorner, newPavings ++ [createBoxPaving leftVarMap])
+                  (filteredExpressionsWithFunctions, leftVarMap, not newIsLeftCorner, [createBoxPaving leftVarMap])
                 )
               rightVarMapWithExpressionsAndCornerAndMinimum = trace "right"
                 (
                   fromMaybe (cn (mpBallP p 1000000000000)) (safeMaximumMinimum functions (typedVarMapToBox rightVarMap p) Nothing),
                   -- fromMaybe (cn (mpBallP p 100000000000)) (safeMaximumMaximum functions (typedVarMapToBox rightVarMap p) Nothing),
                   -- fromMaybe (cn (dyadic 1048576)) (safeMaximumCentre functions (typedVarMapToBox rightVarMap p) Nothing),
-                  (filteredExpressionsWithFunctions, rightVarMap, not newIsLeftCorner, newPavings ++ [createBoxPaving rightVarMap])
+                  (filteredExpressionsWithFunctions, rightVarMap, not newIsLeftCorner, [createBoxPaving rightVarMap])
                 )
             in
               decideConjunctionBestFirst
-                (uncurry Q.insert rightVarMapWithExpressionsAndCornerAndMinimum (uncurry Q.insert leftVarMapWithExpressionsAndCornerAndMinimum queueWithoutVarMap))
-                (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p newPavings
+                (uncurry Q.insert rightVarMapWithExpressionsAndCornerAndMinimum (uncurry Q.insert leftVarMapWithExpressionsAndCornerAndMinimum queueWithoutFront))
+                (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p (currentPavings ++ pavedBoxes)
           -- (_, _, _) -> error "Got unmatched case in decideConjunctionBestFirst"
       else IndeterminateBox typedVarMap currentPavings   -- Reached number of boxes cutoff
     Nothing -> UnsatBox currentPavings -- All areas in queue disproved
@@ -250,14 +246,14 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
             withStrategy
             (parTuple2 rseq rseq)
             (
-              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap leftVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p (currentPavings ++ [createBoxPaving leftVarMap]),
-              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap rightVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p (currentPavings ++ [createBoxPaving rightVarMap]) 
+              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap leftVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p [createBoxPaving leftVarMap],
+              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap rightVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p [createBoxPaving rightVarMap] 
             )
         in
           case leftR of
             UnsatBox pavedBoxesLeft
               -> case rightR of
-                UnsatBox pavedBoxesRight -> UnsatBox $ pavedBoxesLeft ++ pavedBoxesRight
+                UnsatBox pavedBoxesRight -> UnsatBox $ pavedBoxes ++ pavedBoxesLeft ++ pavedBoxesRight
                 r -> r
             r -> r
 
@@ -313,7 +309,7 @@ decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMa
   | null filterOutTrueTerms =
     (SatBox roundedVarMap (pavedBoxes ++ [BoxPaving roundedVarMap SatEval None]), QueueInfo filteredExpressionsWithFunctions isLeftCorner False)
   | checkIfEsFalseUsingApply =
-    (UnsatBox (pavedBoxes ++ [BoxPaving roundedVarMap SatEval None]), QueueInfo filteredExpressionsWithFunctions isLeftCorner False)
+    (UnsatBox (pavedBoxes ++ [BoxPaving roundedVarMap UnsatEval None]), QueueInfo filteredExpressionsWithFunctions isLeftCorner False)
   | otherwise = checkSimplex
   where
       box  = typedVarMapToBox typedVarMap p
@@ -344,7 +340,7 @@ decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMa
             (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) (UnsatBox (pavedBoxes ++ [BoxPaving [] UnsatLin Prune]), QueueInfo filteredExpressionsWithFunctions isLeftCorner True)
             (Nothing, Just newVarMap) -> trace "decideWithSimplex indet" $
               case safeVarMapToTypedVarMap newVarMap varNamesWithTypes of
-                Nothing -> (UnsatBox pavedBoxes, QueueInfo filteredExpressionsWithFunctions isLeftCorner True) -- This will only happen when all integers in an integer-only varMap have been decided
+                Nothing -> (UnsatBox (pavedBoxes ++ [BoxPaving [] UnsatLin Prune]), QueueInfo filteredExpressionsWithFunctions isLeftCorner True) -- This will only happen when all integers in an integer-only varMap have been decided
                 Just nvm ->
                   let
                     newTypedVarMap = unsafeIntersectVarMap nvm roundedVarMap
