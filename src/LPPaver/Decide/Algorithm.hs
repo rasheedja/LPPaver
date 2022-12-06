@@ -151,7 +151,7 @@ decideConjunctionBestFirst
   -> Precision    -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
   -> [BoxStep TypedVarMap]            -- ^ The boxes that we have checked so far.
   -> DNFConjunctionResult TypedVarMap -- ^ The return result.
-                                     -- (IndeterminateBox, indeterminateArea, pavedBoxes) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (IndetBox, indeterminateArea, pavedBoxes) means that the algorithm could not make a decision and returns an example of an indeterminate area.
                                      -- (UnsatBox, pavedBoxes) means that the algorithm has decided the DNF is unsatisfiable over the given area.
                                      -- (SatBox, satArea, pavedBoxes) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
@@ -163,7 +163,7 @@ decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relat
         case decideConjunctionWithSimplexCE expressionsWithFunctions typedVarMap typedVarMap relativeImprovementCutoff p isLeftCorner expressionBoxPavings of
           (UnsatBox pavedBoxes, QueueInfo {}) -> decideConjunctionBestFirst queueWithoutFront (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p (currentPavings ++ pavedBoxes)
           (SatBox satArea pavedBoxes, QueueInfo {}) -> SatBox satArea (currentPavings ++ pavedBoxes)
-          (IndeterminateBox indeterminateVarMap pavedBoxes, QueueInfo filteredExpressionsWithFunctions newIsLeftCorner) ->
+          (IndetBox indeterminateVarMap pavedBoxes, QueueInfo filteredExpressionsWithFunctions newIsLeftCorner) ->
             let
               functions = map snd filteredExpressionsWithFunctions
               (leftVarMap, rightVarMap) = trace "bisecting" bisectWidestTypedInterval indeterminateVarMap
@@ -187,7 +187,7 @@ decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relat
                 (uncurry Q.insert rightVarMapWithExpressionsAndCornerAndMinimum (uncurry Q.insert leftVarMapWithExpressionsAndCornerAndMinimum queueWithoutFront))
                 (numberOfBoxesExamined + 1) numberOfBoxesCutoff relativeImprovementCutoff p (currentPavings ++ pavedBoxes ++ [Split indeterminateVarMap leftVarMap rightVarMap])
           -- (_, _, _) -> error "Got unmatched case in decideConjunctionBestFirst"
-      else IndeterminateBox typedVarMap currentPavings   -- Reached number of boxes cutoff
+      else IndetBox typedVarMap currentPavings   -- Reached number of boxes cutoff
     Nothing -> UnsatBox currentPavings -- All areas in queue disproved
 
 -- |Decide a conjunction arising from a DNF over a given box using a depth-first branch-and-prune algorithm which tends to work well when the problem is unsatisfiable.
@@ -203,7 +203,7 @@ decideConjunctionDepthFirstWithSimplex
   -> Precision            -- ^'Precision' used for 'MPBall's. 'prec' 100 is the recommended default.
   -> [BoxStep TypedVarMap]        -- The boxes that we have paved so far.
   -> DNFConjunctionResult TypedVarMap -- ^ The return result.
-                                     -- (IndeterminateBox, indeterminateArea, pavedBoxes) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                     -- (IndetBox, indeterminateArea, pavedBoxes) means that the algorithm could not make a decision and returns an example of an indeterminate area.
                                      -- (UnsatBox, pavedBoxes) means that the algorithm has decided the DNF is unsatisfiable over the given area.
                                      -- (SatBox, satArea, pavedBoxes) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
@@ -242,6 +242,8 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
 
           -- createBoxPaving tvm = BoxPaving tvm (if wasPruned then IndetLin else IndetEval) Split
 
+          currentPavingsWithSplit = currentPavings ++ [Split varMapToBisect leftVarMap rightVarMap]
+
           (leftR, rightR) =
             withStrategy
             (parTuple2 rseq rseq)
@@ -251,18 +253,20 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
             )
         in
           case leftR of
+            SatBox satModel pavedBoxesLeft     -> SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft
+            IndetBox indetModel pavedBoxesLeft -> IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft
             UnsatBox pavedBoxesLeft
               -> case rightR of
-                UnsatBox pavedBoxesRight -> UnsatBox $ currentPavings ++ [Split varMapToBisect leftVarMap rightVarMap] ++ pavedBoxesLeft ++ pavedBoxesRight
-                r -> r
-            r -> r
-
+                UnsatBox pavedBoxesRight            -> UnsatBox            $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
+                SatBox satModel pavedBoxesRight     -> SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
+                IndetBox indetModel pavedBoxesRight -> IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
+                
       bisectUntilCutoff varMapToCheck newPavings =
         if currentDepth !<! depthCutoff -- Best first
           then
               bisectWidestDimensionAndRecurse varMapToCheck newPavings
           else
-            IndeterminateBox varMapToCheck $ newPavings ++ [GaveUp varMapToCheck]
+            IndetBox varMapToCheck $ newPavings ++ [GaveUp varMapToCheck]
 
       checkSimplex
         -- If we can calculate any derivatives
@@ -281,7 +285,7 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
           case decideConjunctionWithApply filteredExpressionsWithFunctions (typedVarMapToBox recurseVarMap p) of
             Just True  -> SatBox recurseVarMap (newPavings ++ [EvalTrue recurseVarMap])
             Just False -> UnsatBox (newPavings ++ [EvalFalse recurseVarMap]) 
-            Nothing    -> IndeterminateBox recurseVarMap (newPavings ++ [GaveUp recurseVarMap])
+            Nothing    -> IndetBox recurseVarMap (newPavings ++ [GaveUp recurseVarMap])
         | typedMaxWidth roundedVarMap / typedMaxWidth recurseVarMap >= relativeImprovementCutoff =
           trace ("recursing with simplex with roundedVarMap: " ++ show recurseVarMap) $
           decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap recurseVarMap currentDepth depthCutoff relativeImprovementCutoff p newPavings
@@ -300,16 +304,16 @@ decideConjunctionWithSimplexCE
   -> [BoxStep TypedVarMap]        -- The boxes that we have paved so far.
   -> (DNFConjunctionResult TypedVarMap, DNFConjunctionQueueInfo)  -- ^The return result is a pair.
                                                                     -- For the first element:
-                                                                    -- (IndeterminateBox, indeterminateArea, pavedBoxes) means that the algorithm could not make a decision and returns an example of an indeterminate area.
+                                                                    -- (IndetBox, indeterminateArea, pavedBoxes) means that the algorithm could not make a decision and returns an example of an indeterminate area.
                                                                     -- (UnsatBox, pavedBoxes) means that the algorithm has decided the DNF is unsatisfiable over the given area.
                                                                     -- (SatBox, satArea, pavedBoxes) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                                                     -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
                                                                     -- The second element is information useful for an efficient best-first algorithm
 decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMap relativeImprovementCutoff p isLeftCorner pavedBoxes
   | null filterOutTrueTerms =
-    (SatBox roundedVarMap (pavedBoxes ++ [EvalTrue roundedVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
+    (SatBox roundedVarMap (pavedBoxes ++ [EvalTrue typedVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
   | checkIfEsFalseUsingApply =
-    (UnsatBox (pavedBoxes ++ [EvalFalse roundedVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
+    (UnsatBox (pavedBoxes ++ [EvalFalse typedVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
   | otherwise = checkSimplex
   where
       box  = typedVarMapToBox typedVarMap p
@@ -372,8 +376,8 @@ decideConjunctionWithSimplexCE expressionsWithFunctions initialVarMap typedVarMa
           case decideConjunctionWithApply filteredExpressionsWithFunctions (typedVarMapToBox recurseVarMap p) of
             Just True  -> (SatBox recurseVarMap (newPavings ++ [EvalTrue recurseVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
             Just False -> (UnsatBox (newPavings ++ [EvalFalse recurseVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
-            Nothing    -> (IndeterminateBox recurseVarMap (newPavings ++ [GaveUp recurseVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
+            Nothing    -> (IndetBox recurseVarMap (newPavings ++ [GaveUp recurseVarMap]), QueueInfo filteredExpressionsWithFunctions isLeftCorner)
         | typedMaxWidth roundedVarMap / typedMaxWidth recurseVarMap >= relativeImprovementCutoff =
           trace ("recursing with simplex with roundedVarMap: " ++ show recurseVarMap) $
           decideConjunctionWithSimplexCE filteredExpressionsWithFunctions initialVarMap recurseVarMap relativeImprovementCutoff p (not isLeftCorner) newPavings
-        | otherwise = (IndeterminateBox recurseVarMap newPavings, QueueInfo filteredExpressionsWithFunctions isLeftCorner)
+        | otherwise = (IndetBox recurseVarMap newPavings, QueueInfo filteredExpressionsWithFunctions isLeftCorner)
