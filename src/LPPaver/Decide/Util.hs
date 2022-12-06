@@ -363,13 +363,13 @@ decideConjunctionTrue c v p =
 
 -- |Check the results of a disjunction of 'DNFConjunctionResult's in a standard manner
 checkDisjunctionResults :: [DNFConjunctionResult box] -> Maybe (DNFConjunctionResult box) -> [[BoxStep box]] -> DNFResult box
-checkDisjunctionResults [] (Just (IndeterminateBox indeterminateArea indeterminatePavings)) _ = IndeterminateDNF indeterminateArea indeterminatePavings
+checkDisjunctionResults [] (Just (IndetBox indeterminateArea indeterminatePavings)) _ = IndeterminateDNF indeterminateArea indeterminatePavings
 checkDisjunctionResults [] _ unsatPavings                                                     = UnsatDNF unsatPavings
 checkDisjunctionResults (result : results) mIndeterminateArea unsatPavings =
   case result of
     r@(SatBox potentialModel pavings) -> SatDNF potentialModel pavings
     (UnsatBox pavings) -> checkDisjunctionResults results mIndeterminateArea (unsatPavings ++ [pavings])
-    r@(IndeterminateBox _ _) -> checkDisjunctionResults results (Just r) unsatPavings
+    r@(IndetBox _ _) -> checkDisjunctionResults results (Just r) unsatPavings
 
 -- |Check the results of a conjunction in a standard manner
 checkConjunctionResults :: [(Maybe Bool, Maybe potentialModel)] -> Maybe potentialModel -> (Maybe Bool, Maybe potentialModel)
