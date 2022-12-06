@@ -164,7 +164,7 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
         n = numerator r
         d = denominator r
 
-    listOfTypedVarMapPavingsToJSON :: [BoxPavings TypedVarMap] -> Integer -> String
+    listOfTypedVarMapPavingsToJSON :: [[BoxStep TypedVarMap]] -> Integer -> String
     listOfTypedVarMapPavingsToJSON listOfPavings tabCount =
       replicate tabCount '\t' ++ "[" ++ "\n" ++
       aux listOfPavings ++ "\n" ++
@@ -174,7 +174,7 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
         aux [ps] = typedVarMapBoxPavingsToJSON ps 1
         aux (ps : pss) = aux [ps] ++ ",\n" ++ aux pss
 
-    typedVarMapBoxPavingsToJSON :: BoxPavings TypedVarMap -> Integer -> String
+    typedVarMapBoxPavingsToJSON :: [BoxStep TypedVarMap] -> Integer -> String
     typedVarMapBoxPavingsToJSON pavings tabCount =
       replicate tabCount '\t' ++ "[" ++ "\n" ++
       aux pavings ++ "\n" ++
@@ -186,15 +186,10 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
         aux [p] = typedVarMapBoxPavingToJSON p tabCount'
         aux (p : ps) = aux [p] ++ replicate tabCount' '\t' ++ ",\n" ++ aux ps
 
-    typedVarMapBoxPavingToJSON :: BoxPaving TypedVarMap -> Integer -> String
-    typedVarMapBoxPavingToJSON (BoxPaving tvm pR pT) tabCount =
+    typedVarMapBoxPavingToJSON :: BoxStep TypedVarMap -> Integer -> String
+    typedVarMapBoxPavingToJSON boxStep tabCount =
       replicate tabCount '\t' ++ "{\n" ++
-      replicate tabCount' '\t' ++ "\"box\":\n" ++
-      replicate tabCount'' '\t' ++ "[\n" ++
-      aux tvm ++
-      replicate tabCount'' '\t' ++ "],\n" ++
-      replicate tabCount' '\t' ++ "\"boxEvalResult\": \"" ++ show pR ++ "\",\n" ++
-      replicate tabCount' '\t' ++ "\"boxReachedBy\": \"" ++ show pT ++ "\"\n" ++
+      aux boxStep ++
       replicate tabCount '\t' ++ "}\n"
       where
         tabCount' = tabCount + 1
@@ -202,15 +197,50 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
         tabCount''' = tabCount'' + 1
         tabCount'''' = tabCount''' + 1
 
-        aux [] = ""
-        aux [TypedVar (v, (l, r)) t] =
-          replicate tabCount''' '\t' ++ "{\n" ++
-          replicate tabCount'''' '\t' ++ "\"variableName\" : " ++ show v ++ ",\n" ++
-          replicate tabCount'''' '\t' ++ "\"variableType\" : " ++ "\"" ++ show t ++ "\"" ++ ",\n" ++
-          replicate tabCount'''' '\t' ++ "\"leftEndpoint\" : " ++ rationalToJSON l ++ ",\n" ++
-          replicate tabCount'''' '\t' ++ "\"rightEndpoint\" : " ++ rationalToJSON r ++ "\n" ++
-          replicate tabCount''' '\t' ++ "}\n"
-        aux (v : vs) = aux [v] ++ replicate tabCount''' '\t' ++ "," ++ "\n" ++ aux vs
+        showTypedVarMap box boxName = 
+          replicate tabCount' '\t' ++ "\"" ++ boxName ++ "\":\n" ++
+          replicate tabCount'' '\t' ++ "[\n" ++
+          aux box ++
+          replicate tabCount'' '\t' ++ "]"
+          where
+            aux [] = ""
+            aux [TypedVar (v, (l, r)) t] =
+              replicate tabCount''' '\t' ++ "{\n" ++
+              replicate tabCount'''' '\t' ++ "\"variableName\" : " ++ show v ++ ",\n" ++
+              replicate tabCount'''' '\t' ++ "\"variableType\" : " ++ "\"" ++ show t ++ "\"" ++ ",\n" ++
+              replicate tabCount'''' '\t' ++ "\"leftEndpoint\" : " ++ rationalToJSON l ++ ",\n" ++
+              replicate tabCount'''' '\t' ++ "\"rightEndpoint\" : " ++ rationalToJSON r ++ "\n" ++
+              replicate tabCount''' '\t' ++ "}\n"
+            aux (v : vs) = aux [v] ++ replicate tabCount''' '\t' ++ "," ++ "\n" ++ aux vs
+
+        aux (Initial box) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"Initial\",\n" ++
+          showTypedVarMap box "box" ++ "\n"
+        aux (EvalTrue box) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"EvalTrue\",\n" ++
+          showTypedVarMap box "box" ++ "\n"
+        aux (EvalFalse box) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"EvalFalse\",\n" ++
+          showTypedVarMap box "box" ++ "\n"
+        aux (GaveUp box) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"GaveUp\",\n" ++
+          showTypedVarMap box "box" ++ "\n"
+        aux (ContractEmpty box) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"ContractEmpty\",\n" ++
+          showTypedVarMap box "box" ++ "\n"
+        aux (Contract box boxC) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"Contract\",\n" ++
+          showTypedVarMap box "box" ++ ",\n" ++
+          showTypedVarMap boxC "boxC" ++ "\n"
+        aux (FoundModel box boxM) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"FoundModel\",\n" ++
+          showTypedVarMap box "box" ++ ",\n" ++
+          showTypedVarMap boxM "boxM" ++ "\n"
+        aux (Split box boxL boxR) =
+          replicate tabCount' '\t' ++ "\"boxStep\": \"Split\",\n" ++
+          showTypedVarMap box "box" ++ ",\n" ++
+          showTypedVarMap boxL "boxL" ++ ",\n" ++
+          showTypedVarMap boxR "boxR" ++ "\n"
 
     writeJSONFile :: String -> String -> IO ()
     writeJSONFile fileNameWithoutExtension jsonString = do
