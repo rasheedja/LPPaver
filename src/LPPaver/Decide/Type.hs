@@ -20,7 +20,7 @@ data BoxStep box = Initial box | EvalTrue box | EvalFalse box | GaveUp box | Spl
   deriving (P.Eq, Show)
 
 -- |The result of a box against some conjunction as well as a list of steps that leads to said result.
-data DNFConjunctionResult box = SatBox box [BoxStep box] | UnsatBox [BoxStep box] | IndeterminateBox box [BoxStep box]
+data DNFConjunctionResult box = SatBox box [BoxStep box] | UnsatBox [BoxStep box] | IndetBox box [BoxStep box]
   deriving (P.Eq, Show)
 
 -- |The result of a box against some DNF.
