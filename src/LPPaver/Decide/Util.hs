@@ -362,7 +362,7 @@ decideConjunctionTrue c v p =
   c
 
 -- |Check the results of a disjunction of 'DNFConjunctionResult's in a standard manner
-checkDisjunctionResults :: [DNFConjunctionResult boxType] -> Maybe (BoxResult boxType) -> [BoxPavings boxType] -> DNFResult boxType
+checkDisjunctionResults :: [DNFConjunctionResult box] -> Maybe (DNFConjunctionResult box) -> [[BoxStep box]] -> DNFResult box
 checkDisjunctionResults [] (Just (IndeterminateBox indeterminateArea indeterminatePavings)) _ = IndeterminateDNF indeterminateArea indeterminatePavings
 checkDisjunctionResults [] _ unsatPavings                                                     = UnsatDNF unsatPavings
 checkDisjunctionResults (result : results) mIndeterminateArea unsatPavings =
