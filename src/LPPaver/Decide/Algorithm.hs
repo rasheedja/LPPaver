@@ -253,7 +253,7 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
           case leftR of
             UnsatBox pavedBoxesLeft
               -> case rightR of
-                UnsatBox pavedBoxesRight -> UnsatBox $ pavedBoxes ++ [Split varMapToBisect leftVarMap rightVarMap] ++ pavedBoxesLeft ++ pavedBoxesRight
+                UnsatBox pavedBoxesRight -> UnsatBox $ currentPavings ++ [Split varMapToBisect leftVarMap rightVarMap] ++ pavedBoxesLeft ++ pavedBoxesRight
                 r -> r
             r -> r
 
