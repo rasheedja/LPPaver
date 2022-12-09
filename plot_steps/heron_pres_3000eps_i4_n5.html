@@ -12,37 +12,43 @@
 		initialStyle = {
 			fillColor: 'white',
 			strokeColor: 'black',
-			strokeWidth: 0.01
+			strokeWidth: 0.01,
+			opacity: 0.1
 		}
 
 		splitStyle = {
 			fillColor: 'white',
 			strokeColor: 'black',
-			strokeWidth: 0.002
+			strokeWidth: 0.002,
+			opacity: 0.1
 		}
 
 		falseStyle = {
 			fillColor: '#000080',
 			strokeColor: 'blue',
-			strokeWidth: 0.002
+			strokeWidth: 0.002,
+			opacity: 0.1
 		}
 
 		modelStyle = {
 			fillColor: 'pink',
 			strokeColor: 'red',
-			strokeWidth: 0.02
+			strokeWidth: 0.004,
+			opacity: 0.9
 		}
 
 		contractEmptyStyle = {
 			fillColor: 'green',
 			strokeColor: 'black',
-			strokeWidth: 0.002
+			strokeWidth: 0.002,
+			opacity: 0.2
 		}
 
 		contractStyle = {
 			fillColor: 'lightgreen',
 			strokeColor: 'green',
-			strokeWidth: 0.002
+			strokeWidth: 0.002,
+			opacity: 0.1
 		}
 
 		var current_step = 1;
@@ -126,7 +132,7 @@
 		function draw_box(s_box, style) {
 			const p = s_box_to_path(s_box);
 			p.style = style
-			p.opacity = 0.1;
+			p.opacity = style.opacity;
 		}
 
 		function draw_contraction(s_box, s_boxC, style) {
@@ -137,7 +143,7 @@
 			});
 			cp.fillRule = 'evenodd';
 			cp.style = style;
-			cp.opacity = 0.2;
+			cp.opacity = style.opacity;
 		}
 
 		function draw_steps(canvas_name, steps) {
