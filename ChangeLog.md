@@ -1,7 +1,10 @@
 # Changelog for LPPaver
 
-## Unreleased Changes
+## [v0.0.4.0](https://github.com/rasheedja/LPPaver/compare/v0.0.3.1...v0.0.4.0)
 
+- Rename LPPaver.Decide modules to LPPaver.Algorithm
+  - LPPaver.Decide.Algorithm is now LPPaver.Algorithm.DNF
+  - Other LPPaver.Decide.Name modules are now LPPaver.Algorithm.Name
 - Polish documentation
 - Add useful types for our decision algorithms
 - Update decision algorithms to use these types, making them easier to read and maintain as well as returning pavings for each algorithm's result
