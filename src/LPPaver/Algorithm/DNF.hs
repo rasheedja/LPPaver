@@ -1,5 +1,5 @@
 {-|
-Module      : LPPaver.Decide.Algorithm
+Module      : LPPaver.Algorithm.DNF
 Description : Algorithms for deciding DNFs
 Copyright   : (c) Junaid Rasheed, 2021-2022
 License     : MPL
@@ -7,7 +7,7 @@ Maintainer  : jrasheed178@gmail.com
 Stability   : experimental
 Module defining algorithms that can decide DNFs of 'E.ESafe' terms.
 -}
-module LPPaver.Decide.Algorithm where
+module LPPaver.Algorithm.DNF where
 
 import MixedTypesNumPrelude
 import qualified PropaFP.Expression as E
@@ -23,9 +23,9 @@ import Data.List (nub)
 import AERN2.BoxFun.Box
 
 
-import LPPaver.Decide.Type
-import LPPaver.Decide.Util
-import LPPaver.Decide.Linearisation
+import LPPaver.Algorithm.Type
+import LPPaver.Algorithm.Util
+import LPPaver.Algorithm.Linearisation
 
 -- |Start initial call to 'decideConjunctionBestFirst' for some conjunction in a DNF.
 setupBestFirstCheckDNF 

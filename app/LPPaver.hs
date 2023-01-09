@@ -2,7 +2,7 @@ module Main where
 
 import MixedTypesNumPrelude
 import AERN2.MP.Ball
-import LPPaver.Decide.Algorithm
+import LPPaver.Algorithm.DNF
 import PropaFP.Expression
 import PropaFP.Eliminator
 import PropaFP.VarMap
@@ -12,8 +12,8 @@ import Options.Applicative
 import System.Directory
 import System.FilePath
 import Data.Ratio
-import LPPaver.Decide.Util
-import LPPaver.Decide.Type
+import LPPaver.Algorithm.Util
+import LPPaver.Algorithm.Type
 import Control.Monad
 
 data ProverOptions = ProverOptions

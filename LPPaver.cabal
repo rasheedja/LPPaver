@@ -27,12 +27,12 @@ source-repository head
 
 library
   exposed-modules:
+      LPPaver.Algorithm.DNF
+      LPPaver.Algorithm.Linearisation
+      LPPaver.Algorithm.Type
+      LPPaver.Algorithm.Util
       LPPaver.Constraint.Type
       LPPaver.Constraint.Util
-      LPPaver.Decide.Algorithm
-      LPPaver.Decide.Linearisation
-      LPPaver.Decide.Type
-      LPPaver.Decide.Util
   other-modules:
       Paths_LPPaver
   hs-source-dirs:

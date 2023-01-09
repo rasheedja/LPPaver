@@ -1,13 +1,13 @@
 {-|
-Module      : LPPaver.Decide.Util
-Description : Utility functions for LPPaver.Decide modules
+Module      : LPPaver.Algorithm.Util
+Description : Utility functions for LPPaver.Algorithm modules
 Copyright   : (c) Junaid Rasheed, 2021-2022
 License     : MPL
 Maintainer  : jrasheed178@gmail.com
 Stability   : experimental
-Module defining useful utility functions for the LPPaver.Decide modules
+Module defining useful utility functions for the LPPaver.Algorithm modules
 -}
-module LPPaver.Decide.Util where
+module LPPaver.Algorithm.Util where
 
 import MixedTypesNumPrelude
 import qualified Prelude as P
@@ -27,7 +27,7 @@ import AERN2.Kleenean
 import PropaFP.Translators.BoxFun
 import AERN2.BoxFun.Optimisation
 import Control.Parallel.Strategies
-import LPPaver.Decide.Type
+import LPPaver.Algorithm.Type
 
 -- TODO: Remove traces
 -- |Dummy trace function

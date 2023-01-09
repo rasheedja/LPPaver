@@ -1,5 +1,5 @@
 {-|
-Module      : LPPaver.Decide.Linearisation
+Module      : LPPaver.Algorithm.Linearisation
 Description : Linearisations for conjunctions
 Copyright   : (c) Junaid Rasheed, 2021-2022
 License     : MPL
@@ -7,7 +7,7 @@ Maintainer  : jrasheed178@gmail.com
 Stability   : experimental
 Module defining linearisations for conjunctions of 'E.ESafe' terms.
 -}
-module LPPaver.Decide.Linearisation where
+module LPPaver.Algorithm.Linearisation where
 
 import MixedTypesNumPrelude
 import qualified PropaFP.Expression as E
@@ -26,7 +26,7 @@ import Linear.Simplex.Simplex
 import Linear.Simplex.Util
 import qualified Linear.Simplex.Types as LT
 
-import LPPaver.Decide.Util
+import LPPaver.Algorithm.Util
 import LPPaver.Constraint.Type
 import LPPaver.Constraint.Util
 import qualified AERN2.Linear.Vector.Type as V

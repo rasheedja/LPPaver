@@ -1,5 +1,5 @@
 {-|
-Module      : LPPaver.Decide.Type
+Module      : LPPaver.Algorithm.Type
 Description : Defines types useful for our decision algorithms.
 Copyright   : (c) Junaid Rasheed, 2022
 License     : MPL
@@ -7,7 +7,7 @@ Maintainer  : jrasheed178@gmail.com
 Stability   : experimental
 Module defining the useful types for our decision algorithms.
 -}
-module LPPaver.Decide.Type where
+module LPPaver.Algorithm.Type where
 
 import MixedTypesNumPrelude
 import qualified Prelude as P

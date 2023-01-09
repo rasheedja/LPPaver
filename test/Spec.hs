@@ -10,9 +10,9 @@ import PropaFP.Translators.DReal
 import PropaFP.Translators.MetiTarski
 import System.Exit
 import MixedTypesNumPrelude (ifThenElse)
-import LPPaver.Decide.Algorithm
-import LPPaver.Decide.Util
-import LPPaver.Decide.Type
+import LPPaver.Algorithm.DNF
+import LPPaver.Algorithm.Util
+import LPPaver.Algorithm.Type
 import PropaFP.Eliminator (minMaxAbsEliminatorF)
 import PropaFP.Parsers.DRealSmt
 import AERN2.MP
