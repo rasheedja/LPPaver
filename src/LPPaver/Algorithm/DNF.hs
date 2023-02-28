@@ -47,7 +47,7 @@ setupBestFirstCheckDNF expressionsWithFunctions typedVarMap bfsBoxesCutoff relat
     -- (Q.singleton (maximum (map (\(_, f) -> (snd . endpointsAsIntervals) (apply f (typedVarMapToBox typedVarMap p))) expressionsWithFunctions)) typedVarMap)
     (Q.singleton
       -- Maximum minimum 
-      (fromMaybe (cn (mpBallP p 1000000000000)) (safeMaximumMinimum (map snd expressionsWithFunctions) (typedVarMapToBox typedVarMap p) Nothing))
+      (fromMaybe (cn (mpBallP p 1000000000000)) (safeAverageDummy (map snd expressionsWithFunctions) (typedVarMapToBox typedVarMap p) Nothing))
       (expressionsWithFunctions, typedVarMap, True, [Initial typedVarMap]))
     -- (Q.singleton (maximum (map (\(_, f) -> AERN2.MP.Ball.centre (apply f (typedVarMapToBox typedVarMap p))) expressionsWithFunctions)) typedVarMap)
     0
@@ -172,13 +172,13 @@ decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relat
 
               leftVarMapWithExpressionsAndCornerAndMinimum  = trace (show (map fst filteredExpressionsWithFunctions)) $ trace "left"
                 (
-                  fromMaybe (cn (mpBallP p 1000000000000)) (safeMaximumMinimum functions (typedVarMapToBox leftVarMap p) Nothing),
+                  fromMaybe (cn (mpBallP p 1000000000000)) (safeAverageDummy functions (typedVarMapToBox leftVarMap p) Nothing),
                   (filteredExpressionsWithFunctions, leftVarMap, not newIsLeftCorner, [])
                 )
               rightVarMapWithExpressionsAndCornerAndMinimum = trace "right"
                 (
-                  fromMaybe (cn (mpBallP p 1000000000000)) (safeMaximumMinimum functions (typedVarMapToBox rightVarMap p) Nothing),
-                  -- fromMaybe (cn (mpBallP p 100000000000)) (safeMaximumMaximum functions (typedVarMapToBox rightVarMap p) Nothing),
+                  fromMaybe (cn (mpBallP p 1000000000000)) (safeAverageDummy functions (typedVarMapToBox rightVarMap p) Nothing),
+                  -- fromMaybe (cn (mpBallP p 100000000000)) (safeMaximumUpper functions (typedVarMapToBox rightVarMap p) Nothing),
                   -- fromMaybe (cn (dyadic 1048576)) (safeMaximumCentre functions (typedVarMapToBox rightVarMap p) Nothing),
                   (filteredExpressionsWithFunctions, rightVarMap, not newIsLeftCorner, [])
                 )
