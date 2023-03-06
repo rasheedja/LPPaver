@@ -64,7 +64,7 @@ checkVCsSat (file : files) fileParent = do
           let 
             ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
           in do
-            case checkEDNFBestFirstWithSimplexCE ednf typedVarMap 1000 1.2 (prec 100) of
+            case checkEDNFBestFirstWithSimplexCE ednf typedVarMap 1000000 1.2 (prec 100) of
               SatDNF _ _ -> do
                 putStrLn $ "Proved sat: " ++ file
                 checkVCsSat files fileParent
@@ -91,7 +91,7 @@ checkVCsUnsat (file : files) fileParent = do
           let 
             ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
           in do
-            case checkEDNFDepthFirstWithSimplex  ednf typedVarMap 100 1.2 (prec 100) of
+            case checkEDNFDepthFirstWithSimplex  ednf typedVarMap 1000 1.2 (prec 100) of
               UnsatDNF _ -> do
                 putStrLn $ "Proved unsat: " ++ file
                 checkVCsUnsat files fileParent
