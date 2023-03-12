@@ -50,7 +50,7 @@ extra-deps:
   # simplex-method
   - simplex-method-0.1.0.0
   # PropaFP
-  - PropaFP-0.1.1.0
+  - PropaFP-0.1.2.0
   
 # Override default flag values for local packages and extra-deps
 # flags: {}
