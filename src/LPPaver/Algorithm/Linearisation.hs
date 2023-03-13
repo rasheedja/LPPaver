@@ -173,16 +173,14 @@ createConstraintsToRemoveConjunctionUnsatArea cornerValuesWithDerivatives varMap
           fLeftUpperBound = snd $ mpBallToRational fLeftRange
           fRightUpperBound = snd $ mpBallToRational fRightRange
 
-          --FIXME: make this safe. Check if vars contain ^fSimplex[0-9]+$. If so, try ^fSimplex1[0-9]+$ or something
-          fSimplexN = "fSimplex" ++ show fnInt
         in
           [
             -- f is definitely below this line from the left corner
             -- Multiplication with left corner and partial derivatives omitted, since left corner is zero
-            LEQ ((fSimplexN, 1.0) : zip vars fNegatedPartialDerivativesUpperBounds)
+            LEQ (zip vars fNegatedPartialDerivativesUpperBounds)
               fLeftUpperBound,
             -- f is definitely below this line from the right corner
-            LEQ ((fSimplexN, 1.0) : zip vars fNegatedPartialDerivativesLowerBounds)
+            LEQ (zip vars fNegatedPartialDerivativesLowerBounds)
               $ foldl add fRightUpperBound $ zipWith mul varsNewUpperBounds fNegatedPartialDerivativesLowerBounds
           ]
       )
@@ -236,17 +234,16 @@ createConstraintsToFindSatSolution cornerValuesWithDerivatives varMap isLeftCorn
             fRightLowerBound = fst $ mpBallToRational fRightRange
 
             --FIXME: make this safe. Check if vars contain ^fSimplex[0-9]+$. If so, try ^fSimplex1[0-9]+$ or something
-            fSimplexN = "fSimplex" ++ show fnInt
           in
             if isLeftCorner
               then
                 -- f is definitely above this line from the left corner
                 -- Multiplication with left corner and partial derivatives omitted, since left corner is zero
-                LEQ ((fSimplexN, 1.0) : zip vars fNegatedPartialDerivativesLowerBounds)
+                LEQ (zip vars fNegatedPartialDerivativesLowerBounds)
                   fLeftLowerBound
               else
                 -- f is definitely above this line from the right corner
-                LEQ ((fSimplexN, 1.0) : zip vars fNegatedPartialDerivativesUpperBounds)
+                LEQ (zip vars fNegatedPartialDerivativesUpperBounds)
                   $ foldl add fRightLowerBound $ zipWith mul varsNewUpperBounds fNegatedPartialDerivativesUpperBounds
 
         )

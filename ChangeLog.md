@@ -1,5 +1,12 @@
 # Changelog for LPPaver
 
+## [v0.0.5.0](https://github.com/rasheedja/LPPaver/compare/v0.0.4.0...v0.0.5.0)
+- Use a new heuristic for the best-first search algorithm
+  - Centre of averages of the ranges of each term in the conjunction is the heuristic
+- Allow larger cutoffs in tests
+  - Required for new heuristic
+- Remove an unneeded variable when linearising functions
+
 ## [v0.0.4.0](https://github.com/rasheedja/LPPaver/compare/v0.0.3.1...v0.0.4.0)
 
 - Rename LPPaver.Decide modules to LPPaver.Algorithm

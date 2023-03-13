@@ -152,53 +152,155 @@ safeMaximum currentMax (x : xs) =
     then safeMaximum currentMax xs
     else safeMaximum (if x !>! currentMax then x else currentMax) xs
 
--- |Safely find the maximum centre of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
-safeMaximumCentre :: [BoxFun] -> Box -> Maybe (CN Dyadic) -> Maybe (CN Dyadic)
+safeAverageDummy :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
+safeAverageDummy a b _ = safeCentreAverage a b
+
+-- |Safely find the centre of the average of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeCentreAverage :: [BoxFun] -> Box -> Maybe (CN MPBall)
+safeCentreAverage fs b = (cnMPBall . AERN2.MP.Ball.centre) <$> aux fs b ((cn . mpBall) 0) 0
+  where
+    aux :: [BoxFun] -> Box -> CN MPBall -> Integer -> Maybe (CN MPBall)
+    aux [] _ sum amount = 
+      case amount of
+        0 -> Nothing
+        _ -> Just (sum / amount)
+    aux (f : fs) box sum amount =
+      if hasError range
+        then aux fs box sum amount
+        else aux fs box (sum + range) (amount + 1)
+      where
+        range = apply f box
+
+-- |Safely find the upper bound of the average of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeAverageUpper :: [BoxFun] -> Box -> Maybe (CN MPBall)
+safeAverageUpper fs b = (snd . endpointsAsIntervals) <$> aux fs b ((cn . mpBall) 0) 0
+  where
+    aux :: [BoxFun] -> Box -> CN MPBall -> Integer -> Maybe (CN MPBall)
+    aux [] _ sum amount = 
+      case amount of
+        0 -> Nothing
+        _ -> Just (sum / amount)
+    aux (f : fs) box sum amount =
+      if hasError range
+        then aux fs box sum amount
+        else aux fs box (sum + range) (amount + 1)
+      where
+        range = apply f box
+
+-- |Safely find the lower bound of the average of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeAverageLower :: [BoxFun] -> Box -> Maybe (CN MPBall)
+safeAverageLower fs b = (snd . endpointsAsIntervals) <$> aux fs b ((cn . mpBall) 0) 0
+  where
+    aux :: [BoxFun] -> Box -> CN MPBall -> Integer -> Maybe (CN MPBall)
+    aux [] _ sum amount = 
+      case amount of
+        0 -> Nothing
+        _ -> Just (sum / amount)
+    aux (f : fs) box sum amount =
+      if hasError range
+        then aux fs box sum amount
+        else aux fs box (sum + range) (amount + 1)
+      where
+        range = apply f box
+
+-- |Safely find the maximum of the centres of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeMaximumCentre :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
 safeMaximumCentre []       _   mCurrentCentre = mCurrentCentre
 safeMaximumCentre (f : fs) box mCurrentCentre =
   if hasError range
     then safeMaximumCentre fs box mCurrentCentre
     else
       case mCurrentCentre of
-        Just currentMax ->
-          if currentMax !>=! rangeCentre
+        Just currentCentre ->
+          if currentCentre !>=! rangeCentre
             then safeMaximumCentre fs box mCurrentCentre
             else safeMaximumCentre fs box (Just rangeCentre)
         Nothing -> safeMaximumCentre fs box (Just rangeCentre)
   where
     range = apply f box
-    rangeCentre = AERN2.MP.Ball.centre range
+    rangeCentre = cnMPBall $ AERN2.MP.Ball.centre range
 
--- |Safely find the maximum minimum of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
-safeMaximumMinimum :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
-safeMaximumMinimum []       _   mCurrentMin = mCurrentMin
-safeMaximumMinimum (f : fs) box mCurrentMin =
+-- |Safely find the minimum of the centres of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeMinimumCentre :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
+safeMinimumCentre []       _   mCurrentCentre = mCurrentCentre
+safeMinimumCentre (f : fs) box mCurrentCentre =
   if hasError range
-    then safeMaximumMinimum fs box mCurrentMin
+    then safeMinimumCentre fs box mCurrentCentre
+    else
+      case mCurrentCentre of
+        Just currentCentre ->
+          if currentCentre !>=! rangeCentre
+            then safeMinimumCentre fs box mCurrentCentre
+            else safeMinimumCentre fs box (Just rangeCentre)
+        Nothing -> safeMinimumCentre fs box (Just rangeCentre)
+  where
+    range = apply f box
+    rangeCentre = cnMPBall $ AERN2.MP.Ball.centre range
+
+-- |Safely find the maximum of the lower bounds of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeMaximumLower :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
+safeMaximumLower []       _   mCurrentMin = mCurrentMin
+safeMaximumLower (f : fs) box mCurrentMin =
+  if hasError range
+    then safeMaximumLower fs box mCurrentMin
     else
       case mCurrentMin of
         Just currentMin ->
           if currentMin !>=! rangeMin
-            then safeMaximumMinimum fs box mCurrentMin
-            else safeMaximumMinimum fs box (Just rangeMin)
-        Nothing -> safeMaximumMinimum fs box (Just rangeMin)
+            then safeMaximumLower fs box mCurrentMin
+            else safeMaximumLower fs box (Just rangeMin)
+        Nothing -> safeMaximumLower fs box (Just rangeMin)
   where
     range = apply f box
     rangeMin = fst $ endpointsAsIntervals range
 
--- |Safely find the maximum maximum of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
-safeMaximumMaximum :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
-safeMaximumMaximum []       _   mCurrentMax = mCurrentMax
-safeMaximumMaximum (f : fs) box mCurrentMax =
+-- |Safely find the maximum of the upper bounds of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeMaximumUpper :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
+safeMaximumUpper []       _   mCurrentMax = mCurrentMax
+safeMaximumUpper (f : fs) box mCurrentMax =
   if hasError range
-    then safeMaximumMaximum fs box mCurrentMax
+    then safeMaximumUpper fs box mCurrentMax
     else
       case mCurrentMax of
         Just currentMax ->
           if currentMax !>=! rangeMax
-            then safeMaximumMinimum fs box mCurrentMax
-            else safeMaximumMinimum fs box (Just rangeMax)
-        Nothing -> safeMaximumMinimum fs box (Just rangeMax)
+            then safeMaximumUpper fs box mCurrentMax
+            else safeMaximumUpper fs box (Just rangeMax)
+        Nothing -> safeMaximumUpper fs box (Just rangeMax)
+  where
+    range = apply f box
+    rangeMax = snd $ endpointsAsIntervals range
+
+-- |Safely find the minimum of the lower bounds of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeMinimumLower :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
+safeMinimumLower []       _   mCurrentMin = mCurrentMin
+safeMinimumLower (f : fs) box mCurrentMin =
+  if hasError range
+    then safeMinimumLower fs box mCurrentMin
+    else
+      case mCurrentMin of
+        Just currentMin ->
+          if currentMin !<=! rangeMin
+            then safeMinimumLower fs box mCurrentMin
+            else safeMinimumLower fs box (Just rangeMin)
+        Nothing -> safeMinimumLower fs box (Just rangeMin)
+  where
+    range = apply f box
+    rangeMin = fst $ endpointsAsIntervals range
+
+-- |Safely find the minimum of the upper bounds of the ranges of a list of 'BoxFun's over a given 'Box', avoiding exceptions by ignoring anything with errors
+safeMinimumUpper :: [BoxFun] -> Box -> Maybe (CN MPBall) -> Maybe (CN MPBall)
+safeMinimumUpper []       _   mCurrentMax = mCurrentMax
+safeMinimumUpper (f : fs) box mCurrentMax =
+  if hasError range
+    then safeMinimumUpper fs box mCurrentMax
+    else
+      case mCurrentMax of
+        Just currentMax ->
+          if currentMax !<=! rangeMax
+            then safeMinimumUpper fs box mCurrentMax
+            else safeMinimumUpper fs box (Just rangeMax)
+        Nothing -> safeMinimumUpper fs box (Just rangeMax)
   where
     range = apply f box
     rangeMax = snd $ endpointsAsIntervals range
