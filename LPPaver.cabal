@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.35.0.
 --
 -- see: https://github.com/sol/hpack
 
 name:           LPPaver
-version:        0.0.4.0
+version:        0.0.5.0
 synopsis:       An automated prover targeting problems that involve nonlinear real arithmetic
 description:    Please see the README on GitHub at <https://github.com/rasheedja/LPPaver#readme>
 category:       Math, Maths, Mathematics, Formal methods, Theorem Provers, verification
