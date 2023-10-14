@@ -39,17 +39,17 @@ constraintVars cs = nub $ aux cs
 
 -- | Convert a list of 'Constraint's into a list of 'LT.PolyConstraint's.
 -- The function returns a pair with the first item being a list of 'LT.PolyConstraint's and the second item being a mapping of 'String' variables (from 'Constraint's) to 'Integer' variables (for 'LT.PolyConstraint's).
-constraintsToSimplexConstraints :: [Constraint] -> ([LT.PolyConstraint], M.Map String Integer)
+constraintsToSimplexConstraints :: [Constraint] -> ([LT.PolyConstraint], M.Map String Int)
 constraintsToSimplexConstraints constraints =
   (
     map
     (\case
-      GEQ varsWithCoeffs rhs -> LT.GEQ (map (\(stringVar, coeff) -> (fromJust (M.lookup stringVar stringIntVarMap), coeff)) varsWithCoeffs) rhs
-      LEQ varsWithCoeffs rhs -> LT.LEQ (map (\(stringVar, coeff) -> (fromJust (M.lookup stringVar stringIntVarMap), coeff)) varsWithCoeffs) rhs
+      GEQ varsWithCoeffs rhs -> LT.GEQ (M.fromList (map (\(stringVar, coeff) -> (int (fromJust (M.lookup stringVar stringIntVarMap)), coeff)) varsWithCoeffs)) rhs
+      LEQ varsWithCoeffs rhs -> LT.LEQ (M.fromList (map (\(stringVar, coeff) -> (int (fromJust (M.lookup stringVar stringIntVarMap)), coeff)) varsWithCoeffs)) rhs
     )
     constraints,
     stringIntVarMap
   )
   where
     stringVars = constraintVars constraints
-    stringIntVarMap = M.fromList $ zip stringVars [1..]
+    stringIntVarMap = M.fromList $ zip stringVars (map fromIntegral [1..])

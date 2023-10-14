@@ -16,6 +16,8 @@ import AERN2.MP
 import AERN2.MP.Precision
 import AERN2.BoxFun.Type
 import AERN2.BoxFun.Box
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Logger (MonadLogger)
 import qualified Data.PQueue.Prio.Max as Q
 import Data.Maybe
 import PropaFP.Translators.BoxFun
@@ -36,103 +38,103 @@ import Data.Bifunctor
 -- The resulting linear system is solved and optimised by the two-phase simplex method.
 -- If the linear system is infeasible, the entire conjunction was unsatisfiable.
 removeConjunctionUnsatAreaWithSimplex 
-  :: [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
+  :: (MonadIO m, MonadLogger m
+  -- , MonadIO Maybe, MonadLogger Maybe, MonadIO ((,) String), MonadLogger ((,) String))
+    )
+  => [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
                                     -- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', 
                                     -- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', 
                                     -- and the third item are partial derivatives of the term over a 'VarMap'.
   -> VarMap                         -- ^ The VarMap over which we are examining the conjunction.
-  -> (Maybe Bool, Maybe VarMap)     -- ^ The result of the simplex method on the resulting linear system.
+  -> m (Maybe Bool, Maybe VarMap)   -- ^ The result of the simplex method on the resulting linear system.
                                     -- (Just False, Nothing) is returned if the system is infeasible.
                                     -- (Nothing, Just newArea) is returned if the system is feasible: newArea is an optimisation of the given 'VarMap'.
-removeConjunctionUnsatAreaWithSimplex cornerValuesWithDerivatives varMap =
-  case mOptimizedVars of
-    Just optimizedVars -> (Nothing, Just optimizedVars)
-    Nothing            -> (Just False, Nothing)
+removeConjunctionUnsatAreaWithSimplex cornerValuesWithDerivatives varMap = do
+  mFeasibleSolution <- findFeasibleSolution simplexSystem
+
+  case mFeasibleSolution of
+    Just feasibleSystem -> do
+      -- pure $ Just $
+      optimizedVars <- 
+            mapM -- Optimize (minimize and maximize) all variables in the varMap
+            (\var ->
+              case M.lookup var stringIntVarMap of
+                Just intVar -> do
+                  intVarLowerVal <- extractSimplexResult <$> optimizeFeasibleSystem (LT.Min (M.fromList [(intVar, 1.0)])) feasibleSystem
+                  intVarUpperVal <- extractSimplexResult <$> optimizeFeasibleSystem (LT.Max (M.fromList [(intVar, 1.0)])) feasibleSystem
+                  case lookup var varMap of
+                    Just (originalL, _) -> -- In the simplex system, the original lower bound of each var was shifted to 0. We undo this shift after optimization.
+                      pure 
+                        ( var
+                        , ( originalL + intVarLowerVal
+                          , originalL + intVarUpperVal
+                          )
+                        )
+                    Nothing -> error "Optimized var not found in original varMap. This should not happen."
+                Nothing -> error "Integer version of var not found. This should not happen."
+            )
+            vars
+      pure (Nothing, Just optimizedVars)
+    Nothing -> pure (Just False, Nothing)
   where
     (simplexSystem, stringIntVarMap) = constraintsToSimplexConstraints $ createConstraintsToRemoveConjunctionUnsatArea cornerValuesWithDerivatives varMap
 
     vars = map fst varMap
 
-    mFeasibleSolution = findFeasibleSolution simplexSystem
-
-
     -- Uses objective var to extract optimized values for each variable
-    extractSimplexResult :: Maybe (Integer, [(Integer, Rational)]) -> Rational
+    extractSimplexResult :: Maybe LT.Result -> Rational
     extractSimplexResult maybeResult =
       case maybeResult of
-        Just (optimizedIntVar, result) -> -- optimizedIntVar refers to the objective variable. We extract the value of the objective
-                                          -- variable from the result
-          case lookup optimizedIntVar result of
+        Just (LT.Result optimizedVar optimizedSystem) -> -- optimizedIntVar refers to the objective variable. We extract the value of the objective
+                                                         -- variable from the result
+          case M.lookup optimizedVar optimizedSystem of
             Just optimizedVarResult -> optimizedVarResult
             Nothing -> error "Extracting simplex result after finding feasible solution resulted in an infeasible result. This should not happen."
         Nothing -> error "Could not optimize feasible system. This should not happen."
 
-    mOptimizedVars =
-      case mFeasibleSolution of
-        Just (feasibleSystem, slackVars, artificialVars, objectiveVar) ->
-          Just $
-          map -- Optimize (minimize and maximize) all variables in the varMap
-          (\var ->
-            case M.lookup var stringIntVarMap of
-              Just intVar ->
-                case lookup var varMap of
-                  Just (originalL, _) -> -- In the simplex system, the original lower bound of each var was shifted to 0. We undo this shift after optimization.
-                    (
-                      var,
-                      (
-                        originalL + extractSimplexResult (optimizeFeasibleSystem (LT.Min [(intVar, 1.0)]) feasibleSystem slackVars artificialVars objectiveVar),
-                        originalL + extractSimplexResult (optimizeFeasibleSystem (LT.Max [(intVar, 1.0)]) feasibleSystem slackVars artificialVars objectiveVar)
-                      )
-                    )
-                  Nothing -> error "Optimized var not found in original varMap. This should not happen."
-              Nothing -> error "Integer version of var not found. This should not happen."
-          )
-          vars
-        Nothing -> Nothing
 
 -- |Find a satisfiable point from a conjunction arising from a DNF by strengthening the conjunction using 'createConstraintsToFindSatSolution'.
 -- The resulting linear system is solved by the first phase of the two-phase simplex method.
 findConjunctionSatAreaWithSimplex 
-  :: [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
+  :: (MonadIO m, MonadLogger m)
+  => [(CN MPBall, CN MPBall, Box)]  -- ^ A list of values needed to linearise each term in the conjunction. 
                                     -- In each triple, the first item is the value of the term from the 'extreme' left corner of a 'VarMap', 
                                     -- the second item is the value of the term from the 'extreme' right corner of a 'VarMap', 
                                     -- and the third item are partial derivatives of the term over a 'VarMap'.
   -> VarMap                         -- ^ The VarMap over which we are examining the conjunction.
   -> Bool                           -- ^ A boolean used to determine which 'extreme' corner to strengthen the conjunction from.
                                     -- If true, linearise from the 'extreme' left corner and vice versa.
-  -> Maybe VarMap                   -- ^ The result. If this is Nothing, no satisfiable point was found.
-findConjunctionSatAreaWithSimplex cornerValuesWithDerivatives varMap isLeftCorner =
+  -> m (Maybe VarMap)               -- ^ The result. If this is Nothing, no satisfiable point was found.
+findConjunctionSatAreaWithSimplex cornerValuesWithDerivatives varMap isLeftCorner = do
+  mFeasibleSolution <- findFeasibleSolution simplexSystem
+  let mFeasibleVars = 
+        case mFeasibleSolution of
+          Just feasibleSystem -> Just $ extractDictValues (LT.dict feasibleSystem)
+          Nothing -> Nothing
   case mFeasibleVars of
     Just newPoints ->
-      Just
-      $
-      map
-      (\var ->
-        case M.lookup var stringIntVarMap of
-          Just intVar ->
-            case lookup var varMap of
-              Just (originalL, _) -> -- In the simplex system, the original lower bound of each var was shifted to 0. We undo this shift after finding a feasible solution
-                (
-                  var,
-                  let feasiblePoint = originalL + fromMaybe 0.0 (lookup intVar newPoints)
-                  in (feasiblePoint, feasiblePoint)
-                )
-              Nothing -> error "Optimized var not found in original varMap. This should not happen."
-          Nothing -> error "Integer version of var not found. This should not happen."
-      )
-      vars
-    Nothing -> trace "no sat solution" Nothing
+      pure . Just
+        $
+        map
+        (\var ->
+          case M.lookup var stringIntVarMap of
+            Just intVar ->
+              case lookup var varMap of
+                Just (originalL, _) -> -- In the simplex system, the original lower bound of each var was shifted to 0. We undo this shift after finding a feasible solution
+                  (
+                    var,
+                    let feasiblePoint = originalL + fromMaybe 0.0 (M.lookup intVar newPoints)
+                    in (feasiblePoint, feasiblePoint)
+                  )
+                Nothing -> error "Optimized var not found in original varMap. This should not happen."
+            Nothing -> error "Integer version of var not found. This should not happen."
+        )
+        vars
+    Nothing -> trace "no sat solution" pure Nothing
   where
     (simplexSystem, stringIntVarMap) = constraintsToSimplexConstraints $ createConstraintsToFindSatSolution cornerValuesWithDerivatives varMap isLeftCorner
 
     vars = map fst varMap
-
-    mFeasibleSolution = findFeasibleSolution simplexSystem
-
-    mFeasibleVars =
-      case mFeasibleSolution of
-        Just (feasibleSystem, _slackVars, _artificialVars, _objectiveVar) -> Just $ displayDictionaryResults feasibleSystem
-        Nothing -> Nothing
 
 -- |Linearisations that weaken a conjunction of terms over some box.
 createConstraintsToRemoveConjunctionUnsatArea 

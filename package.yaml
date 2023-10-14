@@ -25,13 +25,14 @@ dependencies:
 - aern2-mfun >= 0.2.9 && < 0.3
 - aern2-mp >= 0.2.9.1 && < 0.3
 - collect-errors >= 0.1 && < 0.2
-- PropaFP >= 0.1.1 && < 0.2
-- simplex-method >= 0.1 && < 0.2
+- PropaFP >= 0.2 && < 0.3
+- simplex-method >= 0.2 && < 0.3
 - parallel >= 3.2 && < 3.3
 - containers >= 0.6 && < 0.7
 - pqueue >= 1.4 && < 1.5
 - directory >= 1.3 && < 1.4
-- optparse-applicative >= 0.16 && < 0.17
+- optparse-applicative >= 0.17.1 && < 0.18
+- monad-logger >= 0.3.40 && < 0.4
 
 default-extensions:
 - RebindableSyntax,

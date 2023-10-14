@@ -1,6 +1,7 @@
 module Main where
 
 import MixedTypesNumPrelude
+import qualified Prelude as P
 import AERN2.MP.Ball
 import LPPaver.Algorithm.DNF
 import PropaFP.Expression
@@ -15,6 +16,7 @@ import Data.Ratio
 import LPPaver.Algorithm.Util
 import LPPaver.Algorithm.Type
 import Control.Monad
+import Control.Monad.Logger (runStdoutLoggingT, filterLogger, LogLevel(..))
 
 data ProverOptions = ProverOptions
   {
@@ -130,11 +132,11 @@ runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bes
 
 decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO ()
 decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath outputPavings) = do
-  let result =
-        if ceMode
-          then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec p)
-          else checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff           1.2 (prec p)
   let vcFileWithoutExtension = takeFileName . dropExtensions $ filePath
+  result <-
+    if ceMode
+      then runStdoutLoggingT $ filterLogger (\_logSource logLevel -> logLevel P.> LevelError) $ checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec p)
+      else runStdoutLoggingT $ filterLogger (\_logSource logLevel -> logLevel P.> LevelError) $ checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff           1.2 (prec p)
   case result of
     SatDNF model pavings -> do
       putStrLn "sat"
