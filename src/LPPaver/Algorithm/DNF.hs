@@ -21,7 +21,7 @@ import PropaFP.Translators.BoxFun
 import Control.Parallel.Strategies
 import Data.List (nub)
 import AERN2.BoxFun.Box
-
+import qualified AERN2.Linear.Vector.Type as V
 
 import LPPaver.Algorithm.Type
 import LPPaver.Algorithm.Util
@@ -86,8 +86,10 @@ checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImpr
             typedVarMap
           filteredVarMap = typedVarMapToVarMap filteredTypedVarMap
         in
-          decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
+          decideConjunctionDepthFirstWithSimplex shouldSplit bisectTypedVarMap (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
       conjunctions
+    shouldSplit typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
+    bisectTypedVarMap typedVarMap filteredCornerRangesWithDerivatives = bisectWidestTypedInterval typedVarMap -- TODO
 
 -- |Check a DNF of 'E.ESafe' terms using a best-first branch-and-prune algorithm which tends to perform well when the problem is satisfiable.
 checkEDNFBestFirstWithSimplexCE 
@@ -192,7 +194,9 @@ decideConjunctionBestFirst queue numberOfBoxesExamined numberOfBoxesCutoff relat
 
 -- |Decide a conjunction arising from a DNF over a given box using a depth-first branch-and-prune algorithm which tends to work well when the problem is unsatisfiable.
 decideConjunctionDepthFirstWithSimplex
-  :: [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
+  :: (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> Bool)
+  -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> (TypedVarMap,TypedVarMap))
+  -> [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
                           -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
   -> TypedVarMap          -- ^ The initial area over which the box is being examined. This remains unchanged during recursive calls to this function.
   -> Integer              -- ^ The maximum allowed depth before giving up
@@ -205,7 +209,7 @@ decideConjunctionDepthFirstWithSimplex
                                      -- (UnsatBox, pavedBoxes) means that the algorithm has decided the DNF is unsatisfiable over the given area.
                                      -- (SatBox, satArea, pavedBoxes) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
-decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap depthCutoff relativeImprovementCutoff p pavedBoxes =
+decideConjunctionDepthFirstWithSimplex shouldSplit bisectTypedVarMap expressionsWithFunctions initialVarMap depthCutoff relativeImprovementCutoff p pavedBoxes =
   recursive expressionsWithFunctions initialVarMap 0 pavedBoxes
   where
   recursive expressionsWithFunctions typedVarMap currentDepth pavedBoxes
@@ -236,9 +240,9 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap de
         -- This is safe because we do not need every function to enclose the unsat area. 
         filteredCornerRangesWithDerivatives = computeCornerValuesAndDerivatives filterOutTrueTerms box
 
-        bisectWidestDimensionAndRecurse varMapToBisect currentPavings =
+        bisectAndRecurse varMapToBisect currentPavings =
           let
-            (leftVarMap, rightVarMap) = bisectWidestTypedInterval varMapToBisect
+            (leftVarMap, rightVarMap) = bisectTypedVarMap varMapToBisect filteredCornerRangesWithDerivatives
             -- (leftVarMap, rightVarMap) = bimap (`unsafeIntersectVarMap` varMapToBisect) (`unsafeIntersectVarMap` varMapToBisect) $ bisectWidestTypedInterval varMapToBisect
 
             -- createBoxPaving tvm = BoxPaving tvm (if wasPruned then IndetLin else IndetEval) Split
@@ -265,13 +269,13 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap de
         bisectUntilCutoff varMapToCheck newPavings =
           if currentDepth !<! depthCutoff -- Best first
             then
-                bisectWidestDimensionAndRecurse varMapToCheck newPavings
+                bisectAndRecurse varMapToCheck newPavings
             else
               IndetBox varMapToCheck $ newPavings ++ [GaveUp varMapToCheck]
 
         checkSimplex
           -- If we can calculate any derivatives
-          | (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
+          | (not $ shouldSplit roundedVarMap filteredCornerRangesWithDerivatives) && (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
             case removeConjunctionUnsatAreaWithSimplex filteredCornerRangesWithDerivatives untypedRoundedVarMap of
               (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) UnsatBox (pavedBoxes ++ [ContractEmpty typedVarMap])
               (Nothing, Just newVarMap) -> trace "decideWithSimplex indet" $
