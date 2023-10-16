@@ -24,8 +24,8 @@
 		}
 
 		falseStyle = {
-			fillColor: '#000080',
-			strokeColor: 'blue',
+			fillColor: 'green',
+			strokeColor: 'black',
 			strokeWidth: 0.002,
 			opacity: 0.1
 		}
@@ -38,8 +38,8 @@
 		}
 
 		contractEmptyStyle = {
-			fillColor: 'green',
-			strokeColor: 'black',
+			fillColor: 'lightgreen',
+			strokeColor: 'green',
 			strokeWidth: 0.002,
 			opacity: 0.2
 		}
@@ -51,7 +51,7 @@
 			opacity: 0.1
 		}
 
-		var current_step = 1;
+		let current_step = steps[conjunction_to_show - 1].length;
 
 		function from_rational_list(num_den_list) {
 			num = num_den_list[0];
@@ -170,7 +170,8 @@
 					if (i > current_step) { break; }
 
 					// log this box:
-					console.log("step ", i, ": ", s_box); i = i + 1;
+					// console.log("step ", i, ": ", s_box); 
+					i = i + 1;
 
 					// show the step's box(es) on the canvas:
 					switch (step.boxStep) {
