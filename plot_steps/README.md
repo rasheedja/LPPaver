@@ -19,7 +19,7 @@ varY = "$second_var_to_visualise";
 conjunction_to_show = $conjunction_index_to_show;
 // Note that the starting index for the conjunction here is considered 1.
 steps = $json_output_file_contents
-// The steps var should be a list of lists and be equal to the contents of $lppaver_vc.smt2.
+// The steps var should be a list of lists and be equal to the contents of $lppaver_vc.json.
 ```
 
 4. Modify the following line in $my_file_name.
