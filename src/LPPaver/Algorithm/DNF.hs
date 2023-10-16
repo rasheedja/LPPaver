@@ -86,7 +86,7 @@ checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImpr
             typedVarMap
           filteredVarMap = typedVarMapToVarMap filteredTypedVarMap
         in
-          decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap filteredTypedVarMap 0 depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
+          decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
       conjunctions
 
 -- |Check a DNF of 'E.ESafe' terms using a best-first branch-and-prune algorithm which tends to perform well when the problem is satisfiable.
@@ -195,8 +195,6 @@ decideConjunctionDepthFirstWithSimplex
   :: [(E.ESafe, BoxFun)]  -- ^ Each item is a term in the conjunction.
                           -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
   -> TypedVarMap          -- ^ The initial area over which the box is being examined. This remains unchanged during recursive calls to this function.
-  -> TypedVarMap          -- ^ The current area over which the box is being examined.
-  -> Integer              -- ^ The current depth.
   -> Integer              -- ^ The maximum allowed depth before giving up
   -> Rational             -- ^ A rational number used as a heuristic to determine when to recurse when pruning with the simplex method.
                           -- 1.2 (the recommended default) means the simplex method will recurse if the box being examined has shrunk by 20%
@@ -207,89 +205,92 @@ decideConjunctionDepthFirstWithSimplex
                                      -- (UnsatBox, pavedBoxes) means that the algorithm has decided the DNF is unsatisfiable over the given area.
                                      -- (SatBox, satArea, pavedBoxes) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
-decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap typedVarMap currentDepth depthCutoff relativeImprovementCutoff p pavedBoxes
-  | null filterOutTrueTerms =
-    trace ("proved sat with apply " ++ show roundedVarMap)
-    SatBox roundedVarMap (pavedBoxes ++ [EvalTrue typedVarMap])
-  | checkIfEsFalseUsingApply =
-    trace "proved false with apply"
-    UnsatBox (pavedBoxes ++ [EvalFalse typedVarMap])
-  | otherwise = checkSimplex
+decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap depthCutoff relativeImprovementCutoff p pavedBoxes =
+  recursive expressionsWithFunctions initialVarMap 0 pavedBoxes
   where
-      box  = typedVarMapToBox typedVarMap p
-      varNamesWithTypes = getVarNamesWithTypes typedVarMap
-      roundedVarMap =
-        case safeBoxToTypedVarMap box varNamesWithTypes of
-          Just rvm -> unsafeIntersectVarMap initialVarMap rvm
-          Nothing -> error $ "Rounded the following varMap makes it inverted: " ++ show typedVarMap
-      untypedRoundedVarMap = typedVarMapToVarMap roundedVarMap
+  recursive expressionsWithFunctions typedVarMap currentDepth pavedBoxes
+    | null filterOutTrueTerms =
+      trace ("proved sat with apply " ++ show roundedVarMap)
+      SatBox roundedVarMap (pavedBoxes ++ [EvalTrue typedVarMap])
+    | checkIfEsFalseUsingApply =
+      trace "proved false with apply"
+      UnsatBox (pavedBoxes ++ [EvalFalse typedVarMap])
+    | otherwise = checkSimplex
+    where
+        box  = typedVarMapToBox typedVarMap p
+        varNamesWithTypes = getVarNamesWithTypes typedVarMap
+        roundedVarMap =
+          case safeBoxToTypedVarMap box varNamesWithTypes of
+            Just rvm -> unsafeIntersectVarMap initialVarMap rvm
+            Nothing -> error $ "Rounded the following varMap makes it inverted: " ++ show typedVarMap
+        untypedRoundedVarMap = typedVarMapToVarMap roundedVarMap
 
-      esWithRanges             = parMap rseq (\ (e, f) -> ((e, f), apply f box)) expressionsWithFunctions
-      -- filterOutTrueTerms       = esWithRanges
-      filterOutTrueTerms       = filterOutTrueExpressions esWithRanges
-      checkIfEsFalseUsingApply = decideConjunctionRangesFalse filterOutTrueTerms
+        esWithRanges             = parMap rseq (\ (e, f) -> ((e, f), apply f box)) expressionsWithFunctions
+        -- filterOutTrueTerms       = esWithRanges
+        filterOutTrueTerms       = filterOutTrueExpressions esWithRanges
+        checkIfEsFalseUsingApply = decideConjunctionRangesFalse filterOutTrueTerms
 
-      filteredExpressionsWithFunctions = map fst filterOutTrueTerms
+        filteredExpressionsWithFunctions = map fst filterOutTrueTerms
 
-      -- Filter out ranges/derivatives with errors.
-      -- This is safe because we do not need every function to enclose the unsat area. 
-      filteredCornerRangesWithDerivatives = computeCornerValuesAndDerivatives filterOutTrueTerms box
+        -- Filter out ranges/derivatives with errors.
+        -- This is safe because we do not need every function to enclose the unsat area. 
+        filteredCornerRangesWithDerivatives = computeCornerValuesAndDerivatives filterOutTrueTerms box
 
-      bisectWidestDimensionAndRecurse varMapToBisect currentPavings =
-        let
-          (leftVarMap, rightVarMap) = bisectWidestTypedInterval varMapToBisect
-          -- (leftVarMap, rightVarMap) = bimap (`unsafeIntersectVarMap` varMapToBisect) (`unsafeIntersectVarMap` varMapToBisect) $ bisectWidestTypedInterval varMapToBisect
+        bisectWidestDimensionAndRecurse varMapToBisect currentPavings =
+          let
+            (leftVarMap, rightVarMap) = bisectWidestTypedInterval varMapToBisect
+            -- (leftVarMap, rightVarMap) = bimap (`unsafeIntersectVarMap` varMapToBisect) (`unsafeIntersectVarMap` varMapToBisect) $ bisectWidestTypedInterval varMapToBisect
 
-          -- createBoxPaving tvm = BoxPaving tvm (if wasPruned then IndetLin else IndetEval) Split
+            -- createBoxPaving tvm = BoxPaving tvm (if wasPruned then IndetLin else IndetEval) Split
 
-          currentPavingsWithSplit = currentPavings ++ [Split varMapToBisect leftVarMap rightVarMap]
+            currentPavingsWithSplit = currentPavings ++ [Split varMapToBisect leftVarMap rightVarMap]
 
-          (leftR, rightR) =
-            withStrategy
-            (parTuple2 rseq rseq)
-            (
-              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap leftVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p [],
-              decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap rightVarMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p [] 
-            )
-        in
-          case leftR of
-            SatBox satModel pavedBoxesLeft     -> SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft
-            IndetBox indetModel pavedBoxesLeft -> IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft
-            UnsatBox pavedBoxesLeft
-              -> case rightR of
-                UnsatBox pavedBoxesRight            -> UnsatBox            $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
-                SatBox satModel pavedBoxesRight     -> SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
-                IndetBox indetModel pavedBoxesRight -> IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
-                
-      bisectUntilCutoff varMapToCheck newPavings =
-        if currentDepth !<! depthCutoff -- Best first
-          then
-              bisectWidestDimensionAndRecurse varMapToCheck newPavings
-          else
-            IndetBox varMapToCheck $ newPavings ++ [GaveUp varMapToCheck]
+            (leftR, rightR) =
+              withStrategy
+              (parTuple2 rseq rseq)
+              (
+                recursive filteredExpressionsWithFunctions leftVarMap (currentDepth + 1) [],
+                recursive filteredExpressionsWithFunctions rightVarMap (currentDepth + 1) [] 
+              )
+          in
+            case leftR of
+              SatBox satModel pavedBoxesLeft     -> SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft
+              IndetBox indetModel pavedBoxesLeft -> IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft
+              UnsatBox pavedBoxesLeft
+                -> case rightR of
+                  UnsatBox pavedBoxesRight            -> UnsatBox            $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
+                  SatBox satModel pavedBoxesRight     -> SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
+                  IndetBox indetModel pavedBoxesRight -> IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft ++ pavedBoxesRight
+                  
+        bisectUntilCutoff varMapToCheck newPavings =
+          if currentDepth !<! depthCutoff -- Best first
+            then
+                bisectWidestDimensionAndRecurse varMapToCheck newPavings
+            else
+              IndetBox varMapToCheck $ newPavings ++ [GaveUp varMapToCheck]
 
-      checkSimplex
-        -- If we can calculate any derivatives
-        | (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
-          case removeConjunctionUnsatAreaWithSimplex filteredCornerRangesWithDerivatives untypedRoundedVarMap of
-            (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) UnsatBox (pavedBoxes ++ [ContractEmpty typedVarMap])
-            (Nothing, Just newVarMap) -> trace "decideWithSimplex indet" $
-              case safeVarMapToTypedVarMap newVarMap varNamesWithTypes of
-                Just nvm -> recurseOnVarMap safeNvm (pavedBoxes ++ [Contract typedVarMap safeNvm]) where safeNvm = unsafeIntersectVarMap nvm roundedVarMap
-                Nothing -> UnsatBox (pavedBoxes ++ [ContractEmpty typedVarMap]) -- This will only happen when all integers in an integer-only varMap have been decided
-            _ -> undefined
-        | otherwise = bisectUntilCutoff roundedVarMap pavedBoxes
+        checkSimplex
+          -- If we can calculate any derivatives
+          | (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
+            case removeConjunctionUnsatAreaWithSimplex filteredCornerRangesWithDerivatives untypedRoundedVarMap of
+              (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) UnsatBox (pavedBoxes ++ [ContractEmpty typedVarMap])
+              (Nothing, Just newVarMap) -> trace "decideWithSimplex indet" $
+                case safeVarMapToTypedVarMap newVarMap varNamesWithTypes of
+                  Just nvm -> recurseOnVarMap safeNvm (pavedBoxes ++ [Contract typedVarMap safeNvm]) where safeNvm = unsafeIntersectVarMap nvm roundedVarMap
+                  Nothing -> UnsatBox (pavedBoxes ++ [ContractEmpty typedVarMap]) -- This will only happen when all integers in an integer-only varMap have been decided
+              _ -> undefined
+          | otherwise = bisectUntilCutoff roundedVarMap pavedBoxes
 
-      recurseOnVarMap recurseVarMap newPavings
-        | typedMaxWidth recurseVarMap == 0 =
-          case decideConjunctionWithApply filteredExpressionsWithFunctions (typedVarMapToBox recurseVarMap p) of
-            Just True  -> SatBox recurseVarMap (newPavings ++ [EvalTrue recurseVarMap])
-            Just False -> UnsatBox (newPavings ++ [EvalFalse recurseVarMap]) 
-            Nothing    -> IndetBox recurseVarMap (newPavings ++ [GaveUp recurseVarMap])
-        | typedMaxWidth roundedVarMap / typedMaxWidth recurseVarMap >= relativeImprovementCutoff =
-          trace ("recursing with simplex with roundedVarMap: " ++ show recurseVarMap) $
-          decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap recurseVarMap currentDepth depthCutoff relativeImprovementCutoff p newPavings
-        | otherwise = bisectUntilCutoff recurseVarMap newPavings
+        recurseOnVarMap recurseVarMap newPavings
+          | typedMaxWidth recurseVarMap == 0 =
+            case decideConjunctionWithApply filteredExpressionsWithFunctions (typedVarMapToBox recurseVarMap p) of
+              Just True  -> SatBox recurseVarMap (newPavings ++ [EvalTrue recurseVarMap])
+              Just False -> UnsatBox (newPavings ++ [EvalFalse recurseVarMap]) 
+              Nothing    -> IndetBox recurseVarMap (newPavings ++ [GaveUp recurseVarMap])
+          | typedMaxWidth roundedVarMap / typedMaxWidth recurseVarMap >= relativeImprovementCutoff =
+            trace ("recursing with simplex with roundedVarMap: " ++ show recurseVarMap) $
+            recursive filteredExpressionsWithFunctions recurseVarMap currentDepth newPavings
+          | otherwise = bisectUntilCutoff recurseVarMap newPavings
 
 -- |Decide a conjunction arising from a DNF over a given box using a best-first branch-and-prune algorithm which tends to work well when the problem is satisfiable.
 decideConjunctionWithSimplexCE
