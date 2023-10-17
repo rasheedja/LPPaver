@@ -90,6 +90,8 @@ proverOptionsParser = ProverOptions
       long "bisection-strategy-coeffs"
       <> short 's'
       <> help "Coefficients for a 2D bisection strategy (experimental)."
+      <> value ""
+      <> showDefault
       <> metavar "INT,...,INT"
     )
 
@@ -176,7 +178,9 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestF
     bisectCoeffs = bisectionCoeffsRat
     
     shouldBisect = shouldBisectWithCoeffs shouldBisectCoeffs
-    bisectTypedVarMap = bisectTypedVarMapWithCoeffs bisectCoeffs
+    bisectTypedVarMap tVarMap filteredCornerRangesWithDerivatives
+      | null bisectCoeffs = bisectWidestTypedInterval tVarMap
+      | otherwise = bisectTypedVarMapWithCoeffs bisectCoeffs tVarMap filteredCornerRangesWithDerivatives
 
     -- Useful functions for converting our pavings into a JSON object
 

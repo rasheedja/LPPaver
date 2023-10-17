@@ -38,7 +38,21 @@ bisectWidestTypedInterval vm = bisectTypedVar vm widestVar
 shouldBisectWithCoeffs :: [Rational] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> Bool)
 shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
 
+{-|
+  Splitting strategy for 2D problems given by a bunch of numeric coefficients.
+
+  The coefficients are for a linear form aligned to the following variables:
+  - width of variable 1
+  - width of variable 2
+-}
 bisectTypedVarMapWithCoeffs :: [Rational] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> (TypedVarMap,TypedVarMap))
-bisectTypedVarMapWithCoeffs coeffs typedVarMap _filteredCornerRangesWithDerivatives = 
-  bisectWidestTypedInterval typedVarMap -- TODO
+bisectTypedVarMapWithCoeffs linCoeffs typedVarMap filteredCornerRangesWithDerivatives = bisectTypedVar typedVarMap selectedVar
+  where
+  selectedVar 
+    | fnValue < 0 = var1
+    | otherwise = var2
+  fnValue = sum $ zipWith (*) linCoeffs $ vmWidths
+  ([var1, var2], vmWidths) = unzip $ map getVarWidth typedVarMap
+  getVarWidth (TypedVar (var, (l,r)) _) = (var, r-l)
+
 
