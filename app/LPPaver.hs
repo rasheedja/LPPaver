@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 module Main where
 
 import MixedTypesNumPrelude
@@ -25,11 +26,12 @@ data ProverOptions = ProverOptions
     precision :: Integer,
     -- relativeImprovementCutoff :: Rational, make this a flag, as a double is probably easier
     fileName :: String,
-    outputPavings :: Bool
+    outputPavings :: Bool,
+    splitStrategyCoeffs :: String
   }
 
-proverOptions :: Parser ProverOptions
-proverOptions = ProverOptions
+proverOptionsParser :: Parser ProverOptions
+proverOptionsParser = ProverOptions
   <$> switch
     (
       long "propafp-done"
@@ -82,23 +84,30 @@ proverOptions = ProverOptions
       <> short 'o'
       <> help "When this flag is passed, LPPaver will produce JSON output of paved boxes."
     )
+  <*> strOption
+    (
+      long "split-strategy-coeffs"
+      <> short 's'
+      <> help "Coefficients for a 2D splitting strategy (experimental)."
+      <> metavar "splitStrategyCoeffs"
+    )
 
 main :: IO ()
 main =
   do
     runProver =<< execParser opts
     where
-      opts = info (proverOptions <**> helper)
+      opts = info (proverOptionsParser <**> helper)
         ( fullDesc
         <> progDesc "todo"
         <> header "LPPaver - prover" )
 
 runProver :: ProverOptions -> IO ()
-runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath outputPavings) =
+runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
   do
     if provingProcessDone
       then do
-        parsedFile <- parseSMT2 filePath
+        parsedFile <- parseSMT2 fileName
         case parseDRealSmtToF parsedFile of
           (Just vc, typedVarMap) ->
             let
@@ -115,7 +124,7 @@ runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bes
         case mFptaylorPath of
           Nothing -> putStrLn "Error - fptaylor executable not in path"
           Just fptaylorPath -> do
-            mParsedVC <- parseVCToF filePath fptaylorPath
+            mParsedVC <- parseVCToF fileName fptaylorPath
             case mParsedVC of
               Just (vc, typedVarMap) ->
                 let
@@ -129,12 +138,12 @@ runProver proverOptions@(ProverOptions provingProcessDone ceMode depthCutoff bes
                 putStrLn "Issue parsing file"
 
 decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO ()
-decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode depthCutoff bestFirstSearchCutoff p filePath outputPavings) = do
+decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestFirstSearchCutoff, precision, fileName, outputPavings}) = do
   let result =
         if ceMode
-          then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec p)
-          else checkEDNFDepthFirstWithSimplex  ednf typedVarMap depthCutoff           1.2 (prec p)
-  let vcFileWithoutExtension = takeFileName . dropExtensions $ filePath
+          then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec precision)
+          else checkEDNFDepthFirstWithSimplex shouldSplit bisectTypedVarMap ednf typedVarMap depthCutoff           1.2 (prec precision)
+  let vcFileWithoutExtension = takeFileName . dropExtensions $ fileName
   case result of
     SatDNF model pavings -> do
       putStrLn "sat"
@@ -156,6 +165,10 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions provingProcessDone ceMode d
         let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
   where
+
+    shouldSplit typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
+    bisectTypedVarMap typedVarMap filteredCornerRangesWithDerivatives = bisectWidestTypedInterval typedVarMap -- TODO
+
     -- Useful functions for converting our pavings into a JSON object
 
     rationalToJSON :: Rational -> String

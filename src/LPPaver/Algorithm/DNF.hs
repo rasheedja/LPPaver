@@ -58,7 +58,9 @@ setupBestFirstCheckDNF expressionsWithFunctions typedVarMap bfsBoxesCutoff relat
 
 -- |Check a DNF of 'E.ESafe' terms using a depth-first branch-and-prune algorithm which tends to perform well when the problem is unsatisfiable.
 checkEDNFDepthFirstWithSimplex 
-  :: [[E.ESafe]]  -- ^ Each item is a term in the conjunction.
+  :: (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> Bool)
+  -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> (TypedVarMap,TypedVarMap))
+  -> [[E.ESafe]]  -- ^ Each item is a term in the conjunction.
                   -- The first item of each pair is the 'E.ESafe' representation of the term and the second item is a 'BoxFun' equivalent of the same term.
   -> TypedVarMap  -- ^ The area over which we are checking the conjunction.
   -> Integer      -- ^ The maximum depth that we can reach before giving up. 
@@ -71,7 +73,7 @@ checkEDNFDepthFirstWithSimplex
                                      -- (SatDNF satArea pavings) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- For indeterminate and sat DNFs, we return pavings from the conjunction that leads to the result.
                                      -- For an unsat dnf, we return a list of pavings for each conjunction in the DNF.
-checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImprovementCutoff p =
+checkEDNFDepthFirstWithSimplex shouldSplit bisectTypedVarMap conjunctions typedVarMap depthCutoff relativeImprovementCutoff p =
   checkDisjunctionResults conjunctionResults Nothing []
   where
     conjunctionResults =
@@ -88,8 +90,6 @@ checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImpr
         in
           decideConjunctionDepthFirstWithSimplex shouldSplit bisectTypedVarMap (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
       conjunctions
-    shouldSplit typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
-    bisectTypedVarMap typedVarMap filteredCornerRangesWithDerivatives = bisectWidestTypedInterval typedVarMap -- TODO
 
 -- |Check a DNF of 'E.ESafe' terms using a best-first branch-and-prune algorithm which tends to perform well when the problem is satisfiable.
 checkEDNFBestFirstWithSimplexCE 
