@@ -171,11 +171,11 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestF
     bisectionCoeffsInt :: [Int]
     bisectionCoeffsInt = read $ "[" ++ bisectionStrategyCoeffs ++ "]"
 
-    bisectionCoeffsRat :: [Rational]
-    bisectionCoeffsRat = map (/ (rational 100)) bisectionCoeffsInt
+    bisectionCoeffsDouble :: [Double]
+    bisectionCoeffsDouble = map (/ (double 100)) bisectionCoeffsInt
 
     shouldBisectCoeffs = []
-    bisectCoeffs = bisectionCoeffsRat
+    bisectCoeffs = bisectionCoeffsDouble
     
     shouldBisect = shouldBisectWithCoeffs shouldBisectCoeffs
     bisectTypedVarMap tVarMap filteredCornerRangesWithDerivatives
