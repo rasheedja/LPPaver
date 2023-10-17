@@ -26,6 +26,7 @@ import qualified AERN2.Linear.Vector.Type as V
 import LPPaver.Algorithm.Type
 import LPPaver.Algorithm.Util
 import LPPaver.Algorithm.Linearisation
+import LPPaver.Algorithm.Bisect (bisectWidestTypedInterval)
 
 -- |Start initial call to 'decideConjunctionBestFirst' for some conjunction in a DNF.
 setupBestFirstCheckDNF 
@@ -73,7 +74,7 @@ checkEDNFDepthFirstWithSimplex
                                      -- (SatDNF satArea pavings) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- For indeterminate and sat DNFs, we return pavings from the conjunction that leads to the result.
                                      -- For an unsat dnf, we return a list of pavings for each conjunction in the DNF.
-checkEDNFDepthFirstWithSimplex shouldSplit bisectTypedVarMap conjunctions typedVarMap depthCutoff relativeImprovementCutoff p =
+checkEDNFDepthFirstWithSimplex shouldBisect bisectTypedVarMap conjunctions typedVarMap depthCutoff relativeImprovementCutoff p =
   checkDisjunctionResults conjunctionResults Nothing []
   where
     conjunctionResults =
@@ -88,7 +89,7 @@ checkEDNFDepthFirstWithSimplex shouldSplit bisectTypedVarMap conjunctions typedV
             typedVarMap
           filteredVarMap = typedVarMapToVarMap filteredTypedVarMap
         in
-          decideConjunctionDepthFirstWithSimplex shouldSplit bisectTypedVarMap (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
+          decideConjunctionDepthFirstWithSimplex shouldBisect bisectTypedVarMap (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
       conjunctions
 
 -- |Check a DNF of 'E.ESafe' terms using a best-first branch-and-prune algorithm which tends to perform well when the problem is satisfiable.
@@ -209,7 +210,7 @@ decideConjunctionDepthFirstWithSimplex
                                      -- (UnsatBox, pavedBoxes) means that the algorithm has decided the DNF is unsatisfiable over the given area.
                                      -- (SatBox, satArea, pavedBoxes) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
                                      -- pavedBoxes is a list storing the boxes that LPPaver has paved through to get to this result.
-decideConjunctionDepthFirstWithSimplex shouldSplit bisectTypedVarMap expressionsWithFunctions initialVarMap depthCutoff relativeImprovementCutoff p pavedBoxes =
+decideConjunctionDepthFirstWithSimplex shouldBisect bisectTypedVarMap expressionsWithFunctions initialVarMap depthCutoff relativeImprovementCutoff p pavedBoxes =
   recursive expressionsWithFunctions initialVarMap 0 pavedBoxes
   where
   recursive expressionsWithFunctions typedVarMap currentDepth pavedBoxes
@@ -275,7 +276,7 @@ decideConjunctionDepthFirstWithSimplex shouldSplit bisectTypedVarMap expressions
 
         checkSimplex
           -- If we can calculate any derivatives
-          | (not $ shouldSplit roundedVarMap filteredCornerRangesWithDerivatives) && (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
+          | (not $ shouldBisect roundedVarMap filteredCornerRangesWithDerivatives) && (not . null) filteredCornerRangesWithDerivatives = trace "decideWithSimplex start" $
             case removeConjunctionUnsatAreaWithSimplex filteredCornerRangesWithDerivatives untypedRoundedVarMap of
               (Just False, _) -> trace ("decideWithSimplex true: " ++ show roundedVarMap) UnsatBox (pavedBoxes ++ [ContractEmpty typedVarMap])
               (Nothing, Just newVarMap) -> trace "decideWithSimplex indet" $

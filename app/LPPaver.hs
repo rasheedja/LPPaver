@@ -14,6 +14,7 @@ import System.Directory
 import System.FilePath
 import Data.Ratio
 import LPPaver.Algorithm.Util
+import LPPaver.Algorithm.Bisect
 import LPPaver.Algorithm.Type
 import Control.Monad
 
@@ -27,7 +28,7 @@ data ProverOptions = ProverOptions
     -- relativeImprovementCutoff :: Rational, make this a flag, as a double is probably easier
     fileName :: String,
     outputPavings :: Bool,
-    splitStrategyCoeffs :: String
+    bisectionStrategyCoeffs :: String
   }
 
 proverOptionsParser :: Parser ProverOptions
@@ -86,10 +87,10 @@ proverOptionsParser = ProverOptions
     )
   <*> strOption
     (
-      long "split-strategy-coeffs"
+      long "bisection-strategy-coeffs"
       <> short 's'
-      <> help "Coefficients for a 2D splitting strategy (experimental)."
-      <> metavar "splitStrategyCoeffs"
+      <> help "Coefficients for a 2D bisection strategy (experimental)."
+      <> metavar "INT,...,INT"
     )
 
 main :: IO ()
@@ -138,11 +139,11 @@ runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
                 putStrLn "Issue parsing file"
 
 decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO ()
-decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestFirstSearchCutoff, precision, fileName, outputPavings}) = do
+decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestFirstSearchCutoff, precision, fileName, outputPavings, bisectionStrategyCoeffs}) = do
   let result =
         if ceMode
           then checkEDNFBestFirstWithSimplexCE ednf typedVarMap bestFirstSearchCutoff 1.2 (prec precision)
-          else checkEDNFDepthFirstWithSimplex shouldSplit bisectTypedVarMap ednf typedVarMap depthCutoff           1.2 (prec precision)
+          else checkEDNFDepthFirstWithSimplex shouldBisect bisectTypedVarMap ednf typedVarMap depthCutoff 1.2 (prec precision)
   let vcFileWithoutExtension = takeFileName . dropExtensions $ fileName
   case result of
     SatDNF model pavings -> do
@@ -165,9 +166,17 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestF
         let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
   where
+    bisectionCoeffsInt :: [Int]
+    bisectionCoeffsInt = read $ "[" ++ bisectionStrategyCoeffs ++ "]"
 
-    shouldSplit typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
-    bisectTypedVarMap typedVarMap filteredCornerRangesWithDerivatives = bisectWidestTypedInterval typedVarMap -- TODO
+    bisectionCoeffsRat :: [Rational]
+    bisectionCoeffsRat = map (/ (rational 100)) bisectionCoeffsInt
+
+    shouldBisectCoeffs = []
+    bisectCoeffs = bisectionCoeffsRat
+    
+    shouldBisect = shouldBisectWithCoeffs shouldBisectCoeffs
+    bisectTypedVarMap = bisectTypedVarMapWithCoeffs bisectCoeffs
 
     -- Useful functions for converting our pavings into a JSON object
 

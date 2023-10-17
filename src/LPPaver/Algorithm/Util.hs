@@ -306,22 +306,6 @@ safeMinimumUpper (f : fs) box mCurrentMax =
     rangeMax = snd $ endpointsAsIntervals range
 
 -- TODO: Move to PropaFP
--- |Bisect the widest interval in a 'VarMap'
-bisectWidestInterval :: VarMap -> (VarMap, VarMap)
-bisectWidestInterval [] = error "Given empty box to bisect"
-bisectWidestInterval vm = bisectVar vm widestVar
-  where
-    (widestVar, _) = widestInterval (tail vm) (head vm)
-
--- TODO: Move to PropaFP
--- |Bisect the widest interval in a 'TypedVarMap'
-bisectWidestTypedInterval :: TypedVarMap -> (TypedVarMap, TypedVarMap)
-bisectWidestTypedInterval [] = error "Given empty box to bisect"
-bisectWidestTypedInterval vm = bisectTypedVar vm widestVar
-  where
-    (widestVar, _) = widestTypedInterval (tail vm) $ typedVarIntervalToVarInterval (head vm)
-
--- TODO: Move to PropaFP
 -- |Ensures that the first varMap is within the second varMap
 -- If it is, returns the first varMap.
 -- If it isn't modifies the varMap so that the returned varMap is within the second varMap
