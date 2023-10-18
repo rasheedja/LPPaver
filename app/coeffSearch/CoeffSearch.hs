@@ -38,7 +38,7 @@ data Config = Config {
 }
 
 defaultConfig = Config {
-  populationSize = 10,
+  populationSize = 100,
   generations = 10,
   mutateIndividualProb = 0.1,
   mutateNumberProb = 0.2,
@@ -50,10 +50,10 @@ random01 :: IO Float
 random01 = randomRIO (0,1 :: Float)
 
 optimise :: Config -> IO (Population, EvalTable)
-optimise config@(Config { generations }) = do
+optimise config@(Config { }) = do
   let initEvalTable = Map.empty
   (pop, evalTable) <- initPopulation initEvalTable config
-  (pop2, evalTable2) <- runGenerations config generations evalTable pop
+  (pop2, evalTable2) <- runGenerations config 1 evalTable pop
   pure (pop2, evalTable2)
 
 initPopulation :: EvalTable -> Config -> IO (Population, EvalTable)
@@ -72,20 +72,22 @@ getRandomCoeffs = do
   mapM (\_ -> randomRIO (-100, 100)) [1..5]
 
 runGenerations :: Config -> Int -> EvalTable -> Population -> IO (Population, EvalTable)
-runGenerations config n evalTable pop 
-  | n == 0 = pure (pop, evalTable)
+runGenerations config@(Config { generations }) n evalTable pop 
+  | n > generations = pure (pop, evalTable)
   | otherwise = do
-    (pop2, evalTable2) <- runGeneration config evalTable pop
-    runGenerations config (n-1) evalTable2 pop2
+    (pop2, evalTable2) <- runGeneration config n evalTable pop
+    runGenerations config (n+1) evalTable2 pop2
 
-runGeneration :: Config -> EvalTable -> Population -> IO (Population, EvalTable)
-runGeneration config@(Config { populationSize }) evalTable pop = do
+runGeneration :: Config -> Int -> EvalTable -> Population -> IO (Population, EvalTable)
+runGeneration config@(Config { populationSize }) n evalTable pop = do
   (mutated, evalTable2) <- mutatePop config evalTable pop
   parents <- selectParents config pop
   putStrLn $ printf "parents =\n%s" (unlines $ map show parents)
   (children, evalTable3) <- runCrossOvers config evalTable2 parents
   putStrLn $ printf "children =\n%s" (unlines $ map show children)
-  pure (replaceWithinPop pop (children ++ mutated), evalTable3)
+  let pop2 = replaceWithinPop pop (children ++ mutated)
+  putStrLn $ printf "Generation %i:\n%s" n (unlines $ map show $ take 10 pop2)
+  pure (pop2, evalTable3)
 
 mutatePop :: Config -> EvalTable -> Population -> IO (Population, EvalTable)
 mutatePop config@(Config { mutateIndividualProb, mutateNumberProb, mutateNumberMax }) evalTable pop = recurse evalTable pop []
@@ -161,7 +163,13 @@ evaluateCoeffsMem table coeffs =
       score3 <- evaluateCoeffs coeffs
       let score = (score1 + score2 + score3)/3
       putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
+      appendFile "2D.csv" (formatRow (coeffs, score))
       pure (score, Map.insert coeffs score table)
+      where
+      formatRow :: Individual -> String
+      formatRow (coeffs, score) =
+          printf "%s,%f\n" (drop 1 $ reverse $ drop 1 $ reverse $ show coeffs) score
+
 
 evaluateCoeffs :: Coeffs -> IO Score
 evaluateCoeffs coeffs = 
