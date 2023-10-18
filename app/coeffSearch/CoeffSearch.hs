@@ -158,10 +158,7 @@ evaluateCoeffsMem table coeffs =
       putStrLn $ printf "score cache hit for coeffs = %s" (show coeffs)
       pure (score, table)
     _ -> do
-      score1 <- evaluateCoeffs coeffs
-      score2 <- evaluateCoeffs coeffs
-      score3 <- evaluateCoeffs coeffs
-      let score = (score1 + score2 + score3)/3
+      score <- evaluateCoeffs coeffs
       putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
       appendFile "2D.csv" (formatRow (coeffs, score))
       pure (score, Map.insert coeffs score table)
@@ -185,21 +182,29 @@ evaluateCoeffs coeffs =
       Nothing -> do
         cleanupProcess r
         pure $ totalFailPenalty
-      Just text -> 
-        pure $ (failPenalty text) + (nanosecsToSecs $ toNanoSecs $ timeEnd - timeStart)
+      Just text -> do
+        -- pure $ (failPenalty text) + (nanosecsToSecs $ toNanoSecs $ timeEnd - timeStart)
+        pure $ getScore text
     where
+    command = "lppaver -s " ++ formattedCoeffs ++ " -f 2D -a"
+    formattedCoeffs = reverse $ drop 1 $ reverse $ drop 1 $ show coeffs
+
     timeoutDuration = 6 * second
     second = 1000000
-    nanosecsToSecs :: Integer -> Double
-    nanosecsToSecs nanosecs = fromInteger (nanosecs `div` 1000) / 1000000
+    -- nanosecsToSecs :: Integer -> Double
+    -- nanosecsToSecs nanosecs = fromInteger (nanosecs `div` 1000) / 1000000
 
-    formattedCoeffs = reverse $ drop 1 $ reverse $ drop 1 $ show coeffs
-    command = "lppaver -s " ++ formattedCoeffs ++ " -f 2D -a"
+    totalFailPenalty = 100000 :: Double
+    getScore t =
+      failPenalty + (fromIntegral stepCount)
+      where
+      failPenalty = (fromIntegral numberOfFails) * 20000 :: Double
+      numberOfFails = numberOfProblems - numberOfUnsats
+      numberOfProblems = 4 :: Int
+      numberOfUnsats = length unsatLines
+      unsatLines = filter (isPrefixOf "unsat") (lines t)
 
-    numberOfFails t = numberOfProblems - (numberOfUnsats t)
-    numberOfUnsats t = length $ filter (== "unsat") (lines t)
-    numberOfProblems = 4 :: Int
-    failPenalty t = (fromIntegral $ numberOfFails t) * 20 :: Double
-    totalFailPenalty = 100 :: Double
+      stepCount :: Int
+      stepCount = sum $ map (read . drop 6) unsatLines
 
   
