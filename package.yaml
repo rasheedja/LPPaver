@@ -61,6 +61,13 @@ executables:
     - LPPaver
     - PropaFP
     - filepath
+  coeffSearch:
+    main: Main.hs
+    source-dirs: app/coeffSearch
+    dependencies:
+    - random
+    - process
+    - clock
 
 tests:
   LPPaver-test:

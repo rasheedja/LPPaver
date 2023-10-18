@@ -109,17 +109,14 @@ runProver :: ProverOptions -> IO ()
 runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
   do
     if provingProcessDone
-      then do
-        parsedFile <- parseSMT2 fileName
-        case parseDRealSmtToF parsedFile of
-          (Just vc, typedVarMap) ->
-            let
-              -- If there are variable free comparisons here, we could not deal with them earlier in the proving process.
-              -- LPPaver cannot perform any better with these so we safely remove them.
-              ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
-            in do
-              decideEDNFWithVarMap ednf typedVarMap proverOptions
-          (_, _) -> error "Error - Issue parsing given SMT file"
+      then
+        if fileName == "2D" then do
+          runWithFileName "test/testFiles/2Dbench/S08_Unsat.smt2"
+          runWithFileName "test/testFiles/2Dbench/S06_Unsat.smt2"
+          runWithFileName "test/testFiles/2Dbench/F22_Unsat.smt2"
+          runWithFileName "test/testFiles/2Dbench/heron_pres_30000eps_i4_n5.smt2"
+        else
+          runWithFileName fileName
       else do
         -- PATH needs to include folder containing FPTaylor binary after make
         -- symlink to the binary in somewhere like ~/.local/bin will NOT work reliably
@@ -139,6 +136,19 @@ runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
               Nothing -> do
                 putStrLn "unknown"
                 putStrLn "Issue parsing file"
+  where
+  runWithFileName fName = do
+    parsedFile <- parseSMT2 fName
+    case parseDRealSmtToF parsedFile of
+      (Just vc, typedVarMap) ->
+        let
+          -- If there are variable free comparisons here, we could not deal with them earlier in the proving process.
+          -- LPPaver cannot perform any better with these so we safely remove them.
+          ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
+        in do
+          decideEDNFWithVarMap ednf typedVarMap proverOptions
+      (_, _) -> error "Error - Issue parsing given SMT file"
+
 
 decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO ()
 decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestFirstSearchCutoff, precision, fileName, outputPavings, bisectionStrategyCoeffs}) = do
