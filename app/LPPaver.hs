@@ -166,7 +166,7 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestF
         let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
     UnsatDNF listOfPavings -> do
-      putStrLn "unsat"
+      putStrLn $ "unsat " ++ show (sum $ map length listOfPavings) ++ " steps"
       when outputPavings $ do
         let jsonOutput = listOfTypedVarMapPavingsToJSON listOfPavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
