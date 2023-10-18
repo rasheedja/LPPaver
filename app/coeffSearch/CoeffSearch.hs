@@ -8,13 +8,13 @@ import System.Process
 import System.Clock
 import Control.Concurrent (threadDelay)
 import System.Timeout (timeout)
-import qualified Data.Map as Map
-import Data.List (isPrefixOf, sortOn)
+import Data.List (isPrefixOf, sortOn, foldl1', find)
 import System.Random (Random(random), randomRIO, randomIO)
 import GHC.IO.Handle (hGetContents)
 import Text.Printf (printf)
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
-import PropaFP.Parsers.Lisp.DataTypes (Expression(Boolean))
 
 type Coeffs = [Int]
 
@@ -38,8 +38,8 @@ data Config = Config {
 }
 
 defaultConfig = Config {
-  populationSize = 4,
-  generations = 5,
+  populationSize = 10,
+  generations = 10,
   mutateIndividualProb = 0.1,
   mutateNumberProb = 0.2,
   mutateNumberMax = 5,
@@ -142,8 +142,12 @@ runCrossOvers config@(Config {}) evalTable0 pop = recurse pop [] evalTable0
     coeffs = coeffs1
 
 replaceWithinPop :: Population -> Population -> Population
-replaceWithinPop pop newIndividuals = 
-  sortPop $ newIndividuals ++ (take (length pop - length newIndividuals) pop)
+replaceWithinPop pop0 popToAdd = foldl addOne pop0 popToAdd
+  where
+  addOne pop indiv =
+    case find (\(cf, _) -> cf == fst indiv) pop of
+      Nothing -> sortPop $ [indiv] ++ (take (length pop - 1) pop)
+      _ -> pop -- this one is already in the population
 
 evaluateCoeffsMem :: EvalTable -> Coeffs -> IO (Score, EvalTable)
 evaluateCoeffsMem table coeffs =
