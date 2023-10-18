@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 
 main :: IO ()
 main = do
-    table <- optimise defaultConfig
-    mapM_ print $ Map.toList table
+    pop <- optimise defaultConfig
+    mapM print pop
+    pure ()
     
