@@ -2,16 +2,19 @@
 module CoeffSearch (optimise, defaultConfig) where
 
 import Prelude
+import MixedTypesNumPrelude (ifThenElse)
 
 import System.Process
 import System.Clock
 import Control.Concurrent (threadDelay)
 import System.Timeout (timeout)
 import qualified Data.Map as Map
-import Data.List (isPrefixOf)
-import System.Random (Random(random), randomRIO)
+import Data.List (isPrefixOf, sortOn)
+import System.Random (Random(random), randomRIO, randomIO)
 import GHC.IO.Handle (hGetContents)
 import Text.Printf (printf)
+import qualified Data.IntSet as IntSet
+import PropaFP.Parsers.Lisp.DataTypes (Expression(Boolean))
 
 type Coeffs = [Int]
 
@@ -22,15 +25,28 @@ type Individual = (Coeffs, Score)
 
 type Population = [Individual]
 
+sortPop :: Population -> Population
+sortPop = sortOn snd
+
 data Config = Config {
-  populationSize :: Integer,
-  generations :: Integer
+  populationSize :: Int,
+  generations :: Int,
+  mutateIndividualProb :: Float,
+  mutateNumberProb :: Float,
+  mutateNumberMax :: Int,
+  parentsRatio :: Float
 }
 
 defaultConfig = Config {
   populationSize = 4,
-  generations = 10
+  generations = 5,
+  mutateIndividualProb = 0.1,
+  mutateNumberProb = 0.2,
+  mutateNumberMax = 10,
+  parentsRatio = 0.5
 }
+
+random01 = randomRIO (0,1 :: Float)
 
 optimise :: Config -> IO Population
 optimise config@(Config { generations }) = do
@@ -44,7 +60,7 @@ initPopulation evalTable config@(Config { populationSize }) =
   recursive populationSize [] evalTable
   where
   recursive n accPop evalTable
-    | n == 0 = pure (accPop, evalTable)
+    | n == 0 = pure (sortPop accPop, evalTable)
     | otherwise = do
       coeffs <- getRandomCoeffs
       (score, evalTable2) <- evaluateCoeffsMem evalTable coeffs
@@ -54,7 +70,7 @@ getRandomCoeffs :: IO Coeffs
 getRandomCoeffs = do
   mapM (\_ -> randomRIO (-100, 100)) [1..5]
 
-runGenerations :: Config -> Integer -> EvalTable -> Population -> IO (Population, EvalTable)
+runGenerations :: Config -> Int -> EvalTable -> Population -> IO (Population, EvalTable)
 runGenerations config n evalTable pop 
   | n == 0 = pure (pop, evalTable)
   | otherwise = do
@@ -62,8 +78,71 @@ runGenerations config n evalTable pop
     runGenerations config (n-1) evalTable2 pop2
 
 runGeneration :: Config -> EvalTable -> Population -> IO (Population, EvalTable)
-runGeneration config evalTable pop = do
-  pure (pop, evalTable)
+runGeneration config@(Config { populationSize }) evalTable pop = do
+  (mutated, evalTable2) <- mutatePop config evalTable pop
+  parents <- selectParents config pop
+  putStrLn $ printf "parents =\n%s" (unlines $ map show parents)
+  (children, evalTable3) <- runCrossOvers config evalTable2 parents
+  putStrLn $ printf "children =\n%s" (unlines $ map show children)
+  pure (replaceWithinPop pop (children ++ mutated), evalTable3)
+
+mutatePop :: Config -> EvalTable -> Population -> IO (Population, EvalTable)
+mutatePop config@(Config { mutateIndividualProb, mutateNumberProb, mutateNumberMax }) evalTable pop = recurse evalTable pop []
+  where
+  recurse evalTable [] acc = pure (acc, evalTable)
+  recurse evalTable (indiv : rest) acc = do
+    r <- random01
+    if r >= mutateIndividualProb
+      then do -- not mutate
+        recurse evalTable rest acc
+      else do -- mutate
+        (mutated, evalTable2) <- mutateIndividual indiv evalTable
+        recurse evalTable2 rest (mutated : acc)
+  mutateIndividual indiv@(coeffs, _) evalTable = do
+    coeffs2 <- mapM mutateCoeff coeffs
+    (score, evalTable2) <- evaluateCoeffsMem evalTable coeffs2
+    putStrLn $ printf "mutated: coeffs = %s\n      to coeffs = %s" (show coeffs) (show coeffs2)
+    pure ((coeffs2, score), evalTable2)
+  mutateCoeff coeff = do
+    r <- random01
+    if r >= mutateNumberProb
+      then pure coeff -- not mutate
+      else do
+        delta <- randomRIO (- mutateNumberMax, mutateNumberMax)
+        pure (coeff + delta)
+
+selectParents :: Config -> Population -> IO Population
+selectParents config@(Config {parentsRatio}) pop = do
+  indices <- sequence $ replicate (2*popSize) (randomRIO (0, popSize-1))
+  pure $ map (pop !!) $ take numberOfParents $ removeRepetitions indices
+  where
+  numberOfParents = 2 * (floor ((parentsRatio/2) * (fromIntegral popSize)))
+  popSize = length pop
+
+removeRepetitions :: [Int] -> [Int]
+removeRepetitions = recurse IntSet.empty
+  where
+  recurse seenBefore [] = []
+  recurse seenBefore (i : rest) 
+    | i `IntSet.member` seenBefore = recurse seenBefore rest
+    | otherwise = i : (recurse (IntSet.insert i seenBefore) rest)
+
+runCrossOvers :: Config -> EvalTable -> Population -> IO (Population, EvalTable)
+runCrossOvers config@(Config {}) evalTable0 pop = recurse pop [] evalTable0
+  where
+  recurse [] acc evalTable = pure (acc, evalTable)
+  recurse [_] acc evalTable = pure (acc, evalTable)
+  recurse ((coeffs1, _) : (coeffs2, _) : rest) acc evalTable = do
+    decisions <- sequence (replicate (length coeffs) randomIO)
+    let coeffs = zipWith3 ifThenElse (decisions :: [Bool]) coeffs1 coeffs2
+    (score, evalTable2) <- evaluateCoeffsMem evalTable coeffs
+    recurse rest ((coeffs, score) : acc) evalTable2
+    where
+    coeffs = coeffs1
+
+replaceWithinPop :: Population -> Population -> Population
+replaceWithinPop pop newIndividuals = 
+  sortPop $ newIndividuals ++ (take (length pop - length newIndividuals) pop)
 
 evaluateCoeffsMem :: EvalTable -> Coeffs -> IO (Score, EvalTable)
 evaluateCoeffsMem table coeffs =
