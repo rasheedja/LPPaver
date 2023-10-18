@@ -1,5 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
-module CoeffSearch (optimise, defaultConfig) where
+module CoeffSearch (optimise, defaultConfig, Coeffs, Score, Individual) where
 
 import Prelude
 import MixedTypesNumPrelude (ifThenElse)
@@ -42,18 +42,19 @@ defaultConfig = Config {
   generations = 5,
   mutateIndividualProb = 0.1,
   mutateNumberProb = 0.2,
-  mutateNumberMax = 10,
+  mutateNumberMax = 5,
   parentsRatio = 0.5
 }
 
+random01 :: IO Float
 random01 = randomRIO (0,1 :: Float)
 
-optimise :: Config -> IO Population
+optimise :: Config -> IO (Population, EvalTable)
 optimise config@(Config { generations }) = do
   let initEvalTable = Map.empty
   (pop, evalTable) <- initPopulation initEvalTable config
   (pop2, evalTable2) <- runGenerations config generations evalTable pop
-  pure pop2
+  pure (pop2, evalTable2)
 
 initPopulation :: EvalTable -> Config -> IO (Population, EvalTable)
 initPopulation evalTable config@(Config { populationSize }) =
