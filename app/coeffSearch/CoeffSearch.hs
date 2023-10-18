@@ -156,7 +156,10 @@ evaluateCoeffsMem table coeffs =
       putStrLn $ printf "score cache hit for coeffs = %s" (show coeffs)
       pure (score, table)
     _ -> do
-      score <- evaluateCoeffs coeffs
+      score1 <- evaluateCoeffs coeffs
+      score2 <- evaluateCoeffs coeffs
+      score3 <- evaluateCoeffs coeffs
+      let score = (score1 + score2 + score3)/3
       putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
       pure (score, Map.insert coeffs score table)
 
