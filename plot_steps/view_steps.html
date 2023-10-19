@@ -154,7 +154,8 @@
 
 			// scale the canvas coordinates to fit unit [0,1]x[0,1] square canvas:
 			viewW = paper.view.viewSize.width;
-			paper.view.matrix.scale(viewW);
+			viewH = paper.view.viewSize.height;
+			paper.view.matrix.scale(viewW, viewH);
 
 			// set extents using the first step, assumed to be Initial:
 			set_extents(box_to_simple_box(steps[0].box));
