@@ -146,7 +146,7 @@ runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
           -- LPPaver cannot perform any better with these so we safely remove them.
           ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
         in do
-          decideEDNFWithVarMap ednf typedVarMap proverOptions
+          decideEDNFWithVarMap ednf typedVarMap (proverOptions { fileName = fName })
       (_, _) -> error "Error - Issue parsing given SMT file"
 
 
