@@ -43,7 +43,7 @@ bisectWidestTypedInterval vm = bisectTypedVar vm widestVar
     (widestVar, _) = widestTypedInterval (tail vm) $ typedVarIntervalToVarInterval (head vm)
 
 shouldBisectWithCoeffs :: [Double] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> Bool)
-shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
+shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = False -- TODO
 
 {-|
   Splitting strategy for 2D problems given by a bunch of numeric coefficients.
