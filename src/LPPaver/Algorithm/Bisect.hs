@@ -58,13 +58,13 @@ shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = 
 
   The given coefficients cd, cu are used to determine the ratio as follows:
   
-  - `getAspectRatio(cd*dx - cd*dy  + cu*ux - cu*uy)`
+  - `getAspectRatio(cd* fromAspectRatio(dx,dy) + cu*fromAspectRatio(ux,uy))`
 -}
 bisectTypedVarMapWithCoeffs :: [Double] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> (TypedVarMap,TypedVarMap))
 bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivatives = bisectTypedVar typedVarMap selectedVar
   where
   selectedVar 
-    | targetAspectRatio * w1 > w2 = var1 -- w1 is too large, split var1
+    | w1 >= targetAspectRatio * w2 = var1 -- w1 is too large, split var1
     | otherwise = var2
 
   targetAspectRatio = getAspectRatio fnValue
@@ -84,7 +84,7 @@ bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivat
     | otherwise = head fnCharacteristicsSorted
   fnCharacteristicsSorted = map snd $ sortOn fst fnCharacteristics
   fnCharacteristics = map getFnValues filteredCornerRangesWithDerivatives
-  getFnValues (val1CNMP, val2CNMP, derivMPvector) = (valU, derivsD ++ derivsUncertaintyD)
+  getFnValues (val1CNMP, val2CNMP, derivMPvector) = (valU, [ dx, dy, ux, uy ])
     where
     -- how close is the function is to 0? (assuming it is above 0)
     valU = min val1U val2U
@@ -92,8 +92,8 @@ bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivat
     val2U = centreD (double infinity) (upperBound val2CNMP)
 
     derivsCNMP = V.toList derivMPvector
-    derivsD = map (centreD (double 0)) derivsCNMP
-    derivsUncertaintyD = map radiusD derivsCNMP
+    [dx,dy] = map (centreD (double 0)) derivsCNMP
+    [ux,uy] = map radiusD derivsCNMP
 
 maxAspectRatio = double 10
 
@@ -110,6 +110,25 @@ getAspectRatio t
   where
   positiveRatio :: Double -> Double
   positiveRatio t = (maxAspectRatio - 1)*((logistic (t/10))*2 - 1) + 1
+
+{-|
+An inverse of getAspectRatio.
+
+Whenever `1/maxAspectRatio < x/y < maxAspectRatio` it should hold:
+
+- `getAspectRatio(fromAspectRatio x y) ~ x/y`
+
+-}
+fromAspectRatio :: Double -> Double -> Double
+fromAspectRatio xRaw yRaw
+  | x < y = - (fromAspectRatio y x)
+  -- from now x >= y
+  | x < y * maxAspectRatio = 
+    -10 * (log ((1/(((((x/y)-1)/(maxAspectRatio-1))+1)/2))-1))
+  | otherwise = double 1000
+  where
+  x = abs xRaw
+  y = abs yRaw
 
 logistic :: Double -> Double
 logistic x = 1 / (1 + (exp (- x)))
