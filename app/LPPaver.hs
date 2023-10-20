@@ -17,6 +17,7 @@ import LPPaver.Algorithm.Util
 import LPPaver.Algorithm.Bisect
 import LPPaver.Algorithm.Type
 import Control.Monad
+import Data.Maybe (catMaybes)
 
 data ProverOptions = ProverOptions
   {
@@ -111,12 +112,14 @@ runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
     if provingProcessDone
       then
         if fileName == "2D" then do
-          runWithFileName "test/testFiles/2Dbench/S08_Unsat.smt2"
-          runWithFileName "test/testFiles/2Dbench/S06_Unsat.smt2"
-          runWithFileName "test/testFiles/2Dbench/F22_Unsat.smt2"
-          runWithFileName "test/testFiles/2Dbench/heron_pres_30000eps_i4_n5.smt2"
-        else
-          runWithFileName fileName
+          maybeCount1 <- runWithFileName "test/testFiles/2Dbench/S08_Unsat.smt2"
+          maybeCount2 <- runWithFileName "test/testFiles/2Dbench/S06_Unsat.smt2"
+          maybeCount3 <- runWithFileName "test/testFiles/2Dbench/F22_Unsat.smt2"
+          maybeCount4 <- runWithFileName "test/testFiles/2Dbench/heron_pres_30000eps_i4_n5.smt2"
+          print $ sum $ catMaybes [maybeCount1, maybeCount2, maybeCount3, maybeCount4]
+        else do
+          _ <- runWithFileName fileName
+          pure ()
       else do
         -- PATH needs to include folder containing FPTaylor binary after make
         -- symlink to the binary in somewhere like ~/.local/bin will NOT work reliably
@@ -133,6 +136,7 @@ runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
                   ednf = fDNFToEDNF . simplifyFDNF . fToFDNF . simplifyF . minMaxAbsEliminatorF . simplifyF . removeVariableFreeComparisons $ vc
                 in do
                   decideEDNFWithVarMap ednf typedVarMap proverOptions
+                  pure ()
               Nothing -> do
                 putStrLn "unknown"
                 putStrLn "Issue parsing file"
@@ -150,7 +154,7 @@ runProver proverOptions@(ProverOptions {provingProcessDone, fileName}) =
       (_, _) -> error "Error - Issue parsing given SMT file"
 
 
-decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO ()
+decideEDNFWithVarMap :: [[ESafe]] -> TypedVarMap -> ProverOptions -> IO (Maybe Integer)
 decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestFirstSearchCutoff, precision, fileName, outputPavings, bisectionStrategyCoeffs}) = do
   let result =
         if ceMode
@@ -165,11 +169,13 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestF
       when outputPavings $ do
         let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
+      pure Nothing
     UnsatDNF listOfPavings -> do
       putStrLn $ "unsat " ++ show (sum $ map length listOfPavings)
       when outputPavings $ do
         let jsonOutput = listOfTypedVarMapPavingsToJSON listOfPavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
+      pure $ Just (sum $ map length listOfPavings)
     IndeterminateDNF indeterminateExample pavings -> do
       putStrLn "unknown"
       printSMTModel indeterminateExample
@@ -177,6 +183,7 @@ decideEDNFWithVarMap ednf typedVarMap (ProverOptions {ceMode, depthCutoff, bestF
       when outputPavings $ do
         let jsonOutput = typedVarMapBoxPavingsToJSON pavings 0
         writeJSONFile vcFileWithoutExtension jsonOutput
+      pure Nothing
   where
     bisectionCoeffsInt :: [Int]
     bisectionCoeffsInt = read $ "[" ++ bisectionStrategyCoeffs ++ "]"
