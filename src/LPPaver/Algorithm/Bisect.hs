@@ -49,17 +49,19 @@ shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = 
   Splitting strategy for 2D problems given by a bunch of numeric coefficients.
 
   The strategy sets a desired 2D box aspect ratio based on the inputs:
-  - fn 1 slope in variable 1
-  - fn 1 slope in variable 2
-  - fn 1 direction uncertainty in variable 1
-  - fn 1 direction uncertainty in variable 2
+  - dx: fn 1 slope in variable 1
+  - dy: fn 1 slope in variable 2
+  - ux: fn 1 direction uncertainty in variable 1
+  - uy: fn 1 direction uncertainty in variable 2
 
   Fn 1 is the function which seems to be nearest 0 with some certainty.
 
-  The given coefficients are used within a linear form over the above inputs.  The first coeff is the constant.
+  The given coefficients cd, cu are used to determine the ratio as follows:
+  
+  - `getAspectRatio(cd*dx - cd*dy  + cu*ux - cu*uy)`
 -}
 bisectTypedVarMapWithCoeffs :: [Double] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> (TypedVarMap,TypedVarMap))
-bisectTypedVarMapWithCoeffs linCoeffs typedVarMap filteredCornerRangesWithDerivatives = bisectTypedVar typedVarMap selectedVar
+bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivatives = bisectTypedVar typedVarMap selectedVar
   where
   selectedVar 
     | targetAspectRatio * w1 > w2 = var1 -- w1 is too large, split var1
@@ -67,7 +69,7 @@ bisectTypedVarMapWithCoeffs linCoeffs typedVarMap filteredCornerRangesWithDeriva
 
   targetAspectRatio = getAspectRatio fnValue
 
-  fnValue = sum $ zipWith (*) linCoeffs smallestFnCharacteristics
+  fnValue = sum $ zipWith (*) [cd, -cd, cu, -cu] smallestFnCharacteristics
 
   ([var1, var2], vmWidths@[w1, w2]) = unzip $ map getVarWidth typedVarMap
   getVarWidth (TypedVar (var, (l,r)) _) = (var, (double r)-l)
@@ -82,7 +84,7 @@ bisectTypedVarMapWithCoeffs linCoeffs typedVarMap filteredCornerRangesWithDeriva
     | otherwise = head fnCharacteristicsSorted
   fnCharacteristicsSorted = map snd $ sortOn fst fnCharacteristics
   fnCharacteristics = map getFnValues filteredCornerRangesWithDerivatives
-  getFnValues (val1CNMP, val2CNMP, derivMPvector) = (valU, [double 1] ++ derivsD ++ derivsUncertaintyD)
+  getFnValues (val1CNMP, val2CNMP, derivMPvector) = (valU, derivsD ++ derivsUncertaintyD)
     where
     -- how close is the function is to 0? (assuming it is above 0)
     valU = min val1U val2U
@@ -95,6 +97,12 @@ bisectTypedVarMapWithCoeffs linCoeffs typedVarMap filteredCornerRangesWithDeriva
 
 maxAspectRatio = double 10
 
+{-|
+Get target aspect ratio within 1:10..10:1 based on a real number.
+* 0 -> 1:1
+* positive: 1:1..10:1
+* negative: 1:10..1:1 
+-}
 getAspectRatio :: Double -> Double
 getAspectRatio t
   | t < 0 = 1/(positiveRatio (- t))
