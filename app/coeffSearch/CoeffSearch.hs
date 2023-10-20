@@ -15,6 +15,7 @@ import Text.Printf (printf)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
+import Network.HTTP
 
 type Coeffs = [Int]
 
@@ -38,8 +39,8 @@ data Config = Config {
 }
 
 defaultConfig = Config {
-  populationSize = 100,
-  generations = 10,
+  populationSize = 1000,
+  generations = 100,
   mutateIndividualProb = 0.1,
   mutateNumberProb = 0.2,
   mutateNumberMax = 5,
@@ -158,15 +159,27 @@ evaluateCoeffsMem table coeffs =
       putStrLn $ printf "score cache hit for coeffs = %s" (show coeffs)
       pure (score, table)
     _ -> do
-      score <- evaluateCoeffs coeffs
-      putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
-      appendFile "2D.csv" (formatRow (coeffs, score))
+      score <- evaluateCoeffsSurrogate coeffs
+      appendFile "2D-surrogate.csv" (formatRow (coeffs, score))
+
+      -- score <- evaluateCoeffs coeffs
+      -- putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
+      -- appendFile "2D.csv" (formatRow (coeffs, score))
+
       pure (score, Map.insert coeffs score table)
       where
       formatRow :: Individual -> String
       formatRow (coeffs, score) =
           printf "%s,%f\n" (drop 1 $ reverse $ drop 1 $ reverse $ show coeffs) score
 
+evaluateCoeffsSurrogate :: Coeffs -> IO Score
+evaluateCoeffsSurrogate coeffs = do
+  resp <- simpleHTTP (getRequest $ "http://127.0.0.1:8000/model?q=" ++ formattedCoeffs) 
+  case resp of
+    Left err -> error (show err)
+    Right r -> pure $ read $ rspBody r
+  where
+  formattedCoeffs = reverse $ drop 1 $ reverse $ drop 1 $ show coeffs
 
 evaluateCoeffs :: Coeffs -> IO Score
 evaluateCoeffs coeffs = 

@@ -68,6 +68,7 @@ executables:
     - random
     - process
     - clock
+    - HTTP
 
 tests:
   LPPaver-test:
