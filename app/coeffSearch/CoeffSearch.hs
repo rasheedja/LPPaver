@@ -17,6 +17,8 @@ import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
 import Network.HTTP
 
+coeffsSize = 2
+
 type Coeffs = [Int]
 
 type Score = Double
@@ -39,7 +41,7 @@ data Config = Config {
 }
 
 defaultConfig = Config {
-  populationSize = 1000,
+  populationSize = 30,
   generations = 100,
   mutateIndividualProb = 0.1,
   mutateNumberProb = 0.2,
@@ -70,7 +72,7 @@ initPopulation evalTable config@(Config { populationSize }) =
 
 getRandomCoeffs :: IO Coeffs
 getRandomCoeffs = do
-  mapM (\_ -> randomRIO (-100, 100)) [1..5]
+  mapM (\_ -> randomRIO (-100, 100)) [1..coeffsSize]
 
 runGenerations :: Config -> Int -> EvalTable -> Population -> IO (Population, EvalTable)
 runGenerations config@(Config { generations }) n evalTable pop 
@@ -159,12 +161,12 @@ evaluateCoeffsMem table coeffs =
       putStrLn $ printf "score cache hit for coeffs = %s" (show coeffs)
       pure (score, table)
     _ -> do
-      score <- evaluateCoeffsSurrogate coeffs
-      appendFile "2D-surrogate.csv" (formatRow (coeffs, score))
+      -- score <- evaluateCoeffsSurrogate coeffs
+      -- appendFile "2D-surrogate.csv" (formatRow (coeffs, score))
 
-      -- score <- evaluateCoeffs coeffs
-      -- putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
-      -- appendFile "2D.csv" (formatRow (coeffs, score))
+      score <- evaluateCoeffs coeffs
+      putStrLn $ printf "score = %f for coeffs = %s" score (show coeffs)
+      appendFile "2D.csv" (formatRow (coeffs, score))
 
       pure (score, Map.insert coeffs score table)
       where
