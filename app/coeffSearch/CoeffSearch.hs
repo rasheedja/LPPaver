@@ -17,7 +17,7 @@ import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
 import Network.HTTP
 
-coeffsSize = 2
+coeffsSize = 5
 
 type Coeffs = [Int]
 
@@ -41,8 +41,8 @@ data Config = Config {
 }
 
 defaultConfig = Config {
-  populationSize = 30,
-  generations = 100,
+  populationSize = 1000,
+  generations = 300,
   mutateIndividualProb = 0.1,
   mutateNumberProb = 0.2,
   mutateNumberMax = 5,

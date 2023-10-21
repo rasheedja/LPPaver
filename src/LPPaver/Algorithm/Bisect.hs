@@ -42,8 +42,31 @@ bisectWidestTypedInterval vm = bisectTypedVar vm widestVar
   where
     (widestVar, _) = widestTypedInterval (tail vm) $ typedVarIntervalToVarInterval (head vm)
 
+{-|
+  Decision strategy whether to go for split directly or try polytope hull first.
+
+  The strategy sets a desired 2D box aspect ratio based on the inputs:
+  - val: corner value midpoint
+  - uval: value uncertainty
+  - dx: fn 1 slope in variable 1
+  - dy: fn 1 slope in variable 2
+  - ux: fn 1 direction uncertainty in variable 1
+  - uy: fn 1 direction uncertainty in variable 2
+
+  Fn 1 is the function which seems to be nearest 0 with some certainty.
+
+  The given coefficients c, cval, cuval, cd, cud are used to determine the ratio as follows:
+  
+  - `c + cval*val + cuval*uval + cd*(dx - dy) + cud*(ux - uy)`
+-}
 shouldBisectWithCoeffs :: [Double] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> Bool)
-shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = True -- TODO
+shouldBisectWithCoeffs [c, cval, cu, cd, cud] typedVarMap filteredCornerRangesWithDerivatives = 
+  fnValue > 0
+  where
+  fnValue = sum $ zipWith (*) [c       , cval, cu  , cd, -cd, cu, -cu] 
+                              [double 1, val , uval, dx, dy , ux,  uy]
+
+  [val, uval, dx, dy, ux, uy] = smallestFnCharacteristics filteredCornerRangesWithDerivatives
 
 {-|
   Splitting strategy for 2D problems given by a bunch of numeric coefficients.
@@ -58,7 +81,7 @@ shouldBisectWithCoeffs coeffs typedVarMap filteredCornerRangesWithDerivatives = 
 
   The given coefficients cd, cu are used to determine the ratio as follows:
   
-  - `getAspectRatio(cd* fromAspectRatio(dx,dy) + cu*fromAspectRatio(ux,uy))`
+  - `getAspectRatio(cd*dx - cd*dy + cu*ux - cu*uy)`
 -}
 bisectTypedVarMapWithCoeffs :: [Double] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.Vector (CN MPBall))] -> (TypedVarMap,TypedVarMap))
 bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivatives = bisectTypedVar typedVarMap selectedVar
@@ -69,7 +92,7 @@ bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivat
 
   targetAspectRatio = getAspectRatio fnValue
 
-  fnValue = sum $ zipWith (*) [cd, -cd, cu, -cu] smallestFnCharacteristics
+  fnValue = sum $ zipWith (*) [cd, -cd, cu, -cu] [dx, dy, ux, uy]
 
   ([var1, var2], vmWidths@[w1, w2]) = unzip $ map getVarWidth typedVarMap
   getVarWidth (TypedVar (var, (l,r)) _) = (var, (double r)-l)
@@ -79,17 +102,25 @@ bisectTypedVarMapWithCoeffs [cd, cu] typedVarMap filteredCornerRangesWithDerivat
   --     ++ "; fnCharacteristics = " ++ show fnCharacteristics
   --     ++ "; filteredCornerRangesWithDerivatives = " ++ show filteredCornerRangesWithDerivatives
 
-  smallestFnCharacteristics
-    | null fnCharacteristicsSorted = []
-    | otherwise = head fnCharacteristicsSorted
+  [_, _, dx, dy, ux, uy] = smallestFnCharacteristics filteredCornerRangesWithDerivatives
+
+smallestFnCharacteristics filteredCornerRangesWithDerivatives
+  | null fnCharacteristicsSorted = [z,z,z,z,z,z]
+  | otherwise = head fnCharacteristicsSorted
+  where
+  z = double 0
   fnCharacteristicsSorted = map snd $ sortOn fst fnCharacteristics
   fnCharacteristics = map getFnValues filteredCornerRangesWithDerivatives
-  getFnValues (val1CNMP, val2CNMP, derivMPvector) = (valU, [ dx, dy, ux, uy ])
+  getFnValues (val1CNMP, val2CNMP, derivMPvector) = (val, [ val, uval, dx, dy, ux, uy ])
     where
     -- how close is the function is to 0? (assuming it is above 0)
-    valU = min val1U val2U
-    val1U = centreD (double infinity) (upperBound val1CNMP)
-    val2U = centreD (double infinity) (upperBound val2CNMP)
+    val = min val1 val2
+    val1 = centreD (double infinity) (upperBound val1CNMP)
+    val2 = centreD (double infinity) (upperBound val2CNMP)
+
+    uval = max uval1 uval2
+    uval1 = radiusD val1CNMP
+    uval2 = radiusD val2CNMP
 
     derivsCNMP = V.toList derivMPvector
     [dx,dy] = map (centreD (double 0)) derivsCNMP
