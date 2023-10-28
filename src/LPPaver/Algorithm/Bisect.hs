@@ -63,8 +63,8 @@ shouldBisectWithCoeffs :: [Double] -> (TypedVarMap -> [(CN MPBall, CN MPBall, V.
 shouldBisectWithCoeffs [c, cval, cu, cd, cud] typedVarMap filteredCornerRangesWithDerivatives = 
   fnValue > 0
   where
-  fnValue = sum $ zipWith (*) [c       , cval, cu  , cd, -cd, cu, -cu] 
-                              [double 1, val , uval, dx, dy , ux,  uy]
+  fnValue = sum $ zipWith (*) [c       , cval, cu  ,     cd,      cd, cud, cud] 
+                              [double 1, val , uval, abs dx,  abs dy, ux ,  uy]
 
   [val, uval, dx, dy, ux, uy] = smallestFnCharacteristics filteredCornerRangesWithDerivatives
 
