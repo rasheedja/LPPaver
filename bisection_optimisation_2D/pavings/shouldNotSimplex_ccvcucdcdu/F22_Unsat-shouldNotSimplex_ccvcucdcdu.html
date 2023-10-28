@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<!-- Load the Paper.js library -->
+	<script type="text/javascript" src="dist/paper-full.min.js"></script>
+	<!-- Load the JSON data, stored in the variable "steps" -->
+	<script type="text/javascript" src="F22_Unsat-shouldNotSimplex_ccvcucdcdu.js"></script>
+
+	<script type="text/javascript">
+
+		initialStyle = {
+			fillColor: 'white',
+			strokeColor: 'black',
+			strokeWidth: 0.01,
+			opacity: 0.1
+		}
+
+		splitStyle = {
+			fillColor: 'white',
+			strokeColor: 'black',
+			strokeWidth: 0.002,
+			opacity: 0.1
+		}
+
+		falseStyle = {
+			fillColor: 'green',
+			strokeColor: 'black',
+			strokeWidth: 0.002,
+			opacity: 0.1
+		}
+
+		modelStyle = {
+			fillColor: 'pink',
+			strokeColor: 'red',
+			strokeWidth: 0.004,
+			opacity: 0.9
+		}
+
+		contractEmptyStyle = {
+			fillColor: 'lightgreen',
+			strokeColor: 'green',
+			strokeWidth: 0.002,
+			opacity: 0.2
+		}
+
+		contractStyle = {
+			fillColor: 'lightgreen',
+			strokeColor: 'green',
+			strokeWidth: 0.002,
+			opacity: 0.1
+		}
+
+		let current_step = steps[conjunction_to_show - 1].length;
+
+		function from_rational_list(num_den_list) {
+			num = num_den_list[0];
+			den = num_den_list[1];
+			return num / den;
+		}
+
+		function box_to_simple_box(box) {
+			var s_box = {};
+			for (const i of box) {
+				s_box[i.variableName] =
+				{
+					"min": from_rational_list(i.leftEndpoint)
+					, "max": from_rational_list(i.rightEndpoint)
+				}
+			}
+			return s_box;
+		}
+
+		function s_box_contains_valuation(s_box) {
+			var valuation_inside_box = true;
+			for (const v in valuation) {
+				if (Object.hasOwnProperty.call(valuation, v)) {
+					const value = valuation[v];
+					if (!(s_box[v].min <= value && value <= s_box[v].max)) {
+						valuation_inside_box = false;
+						break;
+					}
+				}
+			}
+			return valuation_inside_box;
+		}
+
+		function set_extents(s_box0) {
+			varX_min = s_box0[varX].min;
+			varX_max = s_box0[varX].max;
+			if (varY == "") {
+				varY_min = 0;
+				varY_max = 1;
+			} else {
+				varY_min = s_box0[varY].min;
+				varY_max = s_box0[varY].max;
+			}
+		}
+
+		function s_box_to_path(s_box) {
+			const x_min = s_box[varX].min;
+			const x_max = s_box[varX].max;
+			if (varY == "") {
+				y_min = 0;
+				y_max = 0.1;
+			} else {
+				y_min = s_box[varY].min;
+				y_max = s_box[varY].max;
+			}
+
+			const x1 = (x_min - varX_min) / (varX_max - varX_min);
+			const x2 = (x_max - varX_min) / (varX_max - varX_min);
+			const y1 = (y_min - varY_min) / (varY_max - varY_min);
+			const y2 = (y_max - varY_min) / (varY_max - varY_min);
+
+			const p1 = { "x": x1, "y": y1 };
+			const p2 = { "x": x2, "y": y1 };
+			const p3 = { "x": x2, "y": y2 };
+			const p4 = { "x": x1, "y": y2 };
+
+			const poly = [p1, p2, p3, p4, p1];
+
+			const p = new paper.Path();
+
+			poly.forEach(point => {
+				p.add(new paper.Point(point.x, 1 - point.y));
+			});
+
+			return p;
+		}
+
+		function draw_box(s_box, style) {
+			const p = s_box_to_path(s_box);
+			p.style = style
+			p.opacity = style.opacity;
+		}
+
+		function draw_contraction(s_box, s_boxC, style) {
+			const p = s_box_to_path(s_box);
+			const pC = s_box_to_path(s_boxC);
+			cp = new paper.CompoundPath({
+				children: [p, pC]
+			});
+			cp.fillRule = 'evenodd';
+			cp.style = style;
+			cp.opacity = style.opacity;
+		}
+
+		function draw_steps(canvas_name, steps) {
+			// Get a reference to the canvas object:
+			const canvas = document.getElementById(canvas_name);
+			// Create an empty project and a view for the canvas:
+			paper.setup(canvas);
+
+			// scale the canvas coordinates to fit unit [0,1]x[0,1] square canvas:
+			viewW = paper.view.viewSize.width;
+			paper.view.matrix.scale(viewW);
+
+			// set extents using the first step, assumed to be Initial:
+			set_extents(box_to_simple_box(steps[0].box));
+
+			var i = 1;
+			// steps.reverse();
+			for (const step of steps) {
+				s_box = box_to_simple_box(step.box);
+
+				// is this step starting from a box consistent with the valuation?
+				if (s_box_contains_valuation(s_box)) {
+					// stop if reached current_step:
+					if (i > current_step) { break; }
+
+					// log this box:
+					// console.log("step ", i, ": ", s_box); 
+					i = i + 1;
+
+					// show the step's box(es) on the canvas:
+					switch (step.boxStep) {
+						case "Initial":
+							draw_box(s_box, initialStyle)
+							break;
+
+						case "Split":
+							draw_box(box_to_simple_box(step.boxL), splitStyle);
+							draw_box(box_to_simple_box(step.boxR), splitStyle);
+							break;
+
+						case "ContractEmpty":
+							draw_box(s_box, contractEmptyStyle)
+							break;
+
+						case "Contract":
+							draw_contraction(s_box, box_to_simple_box(step.boxC), contractStyle)
+							break;
+
+						case "EvalFalse":
+							draw_box(s_box, falseStyle)
+							break;
+
+						case "EvalTrue":
+							draw_box(s_box, modelStyle)
+							break;
+
+						case "FoundModel":
+							draw_box(s_box, splitStyle)
+							draw_box(box_to_simple_box(step.boxM), modelStyle)
+							break;
+
+						default:
+							break;
+					}
+				}
+			}
+			// Draw the view now:
+			paper.view.draw();
+		}
+
+		function redraw() {
+			draw_steps('myCanvas1', steps[conjunction_to_show - 1]);
+			document.getElementById('current_step_label').value = current_step;
+		}
+
+		window.onload = redraw;
+	</script>
+</head>
+
+<body>
+	<canvas id="myCanvas1" width="800px" height="800px"></canvas>
+	<hr />
+	<div>
+		<input type="button" value="prev" onclick="current_step--; redraw();">
+		<input type="text" id="current_step_label" onchange="current_step = this.value; redraw();">
+		<input type="button" value="next" onclick="current_step++; redraw();">
+	</div>
+	<!-- <canvas id="myCanvas2" width="1000px" height="500px"></canvas> -->
+</body>
+
+</html>
