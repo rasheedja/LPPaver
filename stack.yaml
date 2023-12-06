@@ -32,6 +32,7 @@ packages:
   - .
   - /home/junaid/Research/git/simplex/simplex-method
   - /home/junaid/Research/git/PropaFP
+  - /home/junaid/Research/git/aern2-base/aern2/aern2-mfun
 
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as
@@ -45,7 +46,7 @@ packages:
 extra-deps:
   # - aern2-real-0.2.9.0
   # - aern2-mp-0.2.9.1
-  - aern2-mfun-0.2.9.0
+  # - aern2-mfun-0.2.9.0
   - aern2-fun-0.2.9.0
   # - mixed-types-num-0.5.10
   # simplex-method
@@ -53,9 +54,8 @@ extra-deps:
   # - git: 
   #   commit: 
   # PropaFP
-  # - PropaFP-0.1.2.0
-  # - git: 
-  #   commit: 
+  # - git: https://github.com/rasheedja/PropaFP/
+    # xzcommit: 58fb301517edb802790120c2e12aca8e746d2df6
   
 # Override default flag values for local packages and extra-deps
 # flags: {}

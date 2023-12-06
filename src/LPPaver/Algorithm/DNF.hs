@@ -9,7 +9,11 @@ Module defining algorithms that can decide DNFs of 'E.ESafe' terms.
 -}
 module LPPaver.Algorithm.DNF where
 
-import MixedTypesNumPrelude
+import qualified Prelude as P
+import MixedTypesNumPrelude hiding (mapM)
+
+import Control.Monad.Par.Combinator (parMapM)
+import Control.Monad.Par.Class (ParFuture)
 import qualified PropaFP.Expression as E
 import PropaFP.VarMap
 import AERN2.MP
@@ -19,11 +23,12 @@ import qualified Data.PQueue.Prio.Max as Q
 import Data.Maybe
 import PropaFP.Translators.BoxFun
 import Control.Parallel.Strategies
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Logger (MonadLogger)
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Parallel
+import Control.Monad.Logger (MonadLogger(..), runStdoutLoggingT, filterLogger, LogLevel(..))
 import Data.List (nub)
 import AERN2.BoxFun.Box
-
+import Control.Concurrent.Async (mapConcurrently)
 
 import LPPaver.Algorithm.Type
 import LPPaver.Algorithm.Util
@@ -79,7 +84,7 @@ checkEDNFDepthFirstWithSimplex
                                -- For an unsat dnf, we return a list of pavings for each conjunction in the DNF.
 checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImprovementCutoff p = do
   conjunctionResults <-
-    withStrategy (parList rseq) <$> mapM
+    liftIO $ mapConcurrently
     (\conjunction ->
       let
         substitutedConjunction = substituteConjunctionEqualities conjunction
@@ -90,7 +95,7 @@ checkEDNFDepthFirstWithSimplex conjunctions typedVarMap depthCutoff relativeImpr
           typedVarMap
         filteredVarMap = typedVarMapToVarMap filteredTypedVarMap
       in
-        decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap filteredTypedVarMap 0 depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
+        runStdoutLoggingT $ filterLogger (\_logSource logLevel -> logLevel P.> LevelError) $ decideConjunctionDepthFirstWithSimplex (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap filteredTypedVarMap 0 depthCutoff relativeImprovementCutoff p [Initial typedVarMap])
     conjunctions
   pure $ checkDisjunctionResults conjunctionResults Nothing []
 
@@ -110,7 +115,7 @@ checkEDNFBestFirstWithSimplexCE
                                -- (Just True, Just satArea) means that the algorithm has decided the DNF is satisfiable (with satArea being a model) over the given area.
 checkEDNFBestFirstWithSimplexCE conjunctions typedVarMap bfsBoxesCutoff relativeImprovementCutoff p = do
   conjunctionResults <-
-    withStrategy (parList rseq) <$> mapM
+    liftIO $ mapConcurrently
     (\conjunction ->
       let
         substitutedConjunction = substituteConjunctionEqualities conjunction
@@ -121,7 +126,7 @@ checkEDNFBestFirstWithSimplexCE conjunctions typedVarMap bfsBoxesCutoff relative
           typedVarMap
         filteredVarMap = typedVarMapToVarMap filteredTypedVarMap
       in
-        setupBestFirstCheckDNF (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap bfsBoxesCutoff relativeImprovementCutoff p
+        runStdoutLoggingT $ filterLogger (\_logSource logLevel -> logLevel P.> LevelError) $ setupBestFirstCheckDNF (map (\e -> (e, expressionToBoxFun (E.extractSafeE e) filteredVarMap p)) substitutedConjunction) filteredTypedVarMap bfsBoxesCutoff relativeImprovementCutoff p
     )
     conjunctions
   pure $ checkDisjunctionResults conjunctionResults Nothing []
@@ -248,9 +253,10 @@ decideConjunctionDepthFirstWithSimplex expressionsWithFunctions initialVarMap ty
         let (leftVarMap, rightVarMap) = bisectWidestTypedInterval varMapToBisect
             currentPavingsWithSplit = currentPavings ++ [Split varMapToBisect leftVarMap rightVarMap]
         [leftR, rightR] <-
-          withStrategy (parList rseq) <$> forM [leftVarMap, rightVarMap]
-          (\varMap -> decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap varMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p [])
-          
+          liftIO $ mapConcurrently
+          (\varMap -> runStdoutLoggingT $ filterLogger (\_logSource logLevel -> logLevel P.> LevelError) $ decideConjunctionDepthFirstWithSimplex filteredExpressionsWithFunctions initialVarMap varMap (currentDepth + 1) depthCutoff relativeImprovementCutoff p [])
+          [leftVarMap, rightVarMap]
+
         case leftR of
           SatBox satModel pavedBoxesLeft     -> pure $ SatBox satModel     $ currentPavingsWithSplit ++ pavedBoxesLeft
           IndetBox indetModel pavedBoxesLeft -> pure $ IndetBox indetModel $ currentPavingsWithSplit ++ pavedBoxesLeft
